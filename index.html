@@ -1,0 +1,2993 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleep Monitoring App</title>
+
+    <!-- ─── PWA ─── -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#020617">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Sleep App">
+    <!-- Icono para iOS (inline SVG base64 como fallback) -->
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@200;300;400;500;600;700&family=Playfair+Display:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #3b82f6;
+            --accent2: #60a5fa;
+            --glint: #3b82f6;
+            --bg-from: #020617;
+            --bg-to: #000000;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: #05070a;
+            color: white;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .phone-frame {
+            width: 100%;
+            max-width: 412px;
+            height: 100vh;
+            max-height: 892px;
+            background: var(--bg-from);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @media (min-width: 640px) {
+            .phone-frame { border-radius: 44px; border: 10px solid #111; height: 850px; }
+        }
+
+        /* ─── TEMAS ─── */
+        .theme-medianoche  { background: #000; --accent:#3b82f6; --accent2:#60a5fa; --glint:#4b5563; }
+        .theme-estrellas   { background: radial-gradient(circle at 50% 30%, #0f172a, #000); --accent:#94a3b8; --accent2:#cbd5e1; --glint:#94a3b8; }
+        .theme-nebuloso    { background: linear-gradient(to bottom, #1e1b4b, #020617); --accent:#818cf8; --accent2:#a5b4fc; --glint:#818cf8; }
+        .theme-lunallena   { background: radial-gradient(circle at 50% 20%, #1e293b, #000); --accent:#e2e8f0; --accent2:#f1f5f9; --glint:#8ba4c0; }
+        .theme-galaxia     { background: linear-gradient(135deg, #1e1b4b, #2e1065, #000); --accent:#c084fc; --accent2:#e879f9; --glint:#c084fc; }
+        .theme-atardecer   { background: linear-gradient(to bottom, #7c2d12, #4c1d95, #000); --accent:#fb923c; --accent2:#fbbf24; --glint:#fb923c; }
+
+        /* Theme transition flash */
+        .theme-flash {
+            position: absolute; inset: 0; z-index: 9999;
+            background: white; opacity: 0; pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+        .theme-flash.active { opacity: 0.08; }
+
+        /* ─── NUBES ─── */
+        .cloud-container { position: absolute; top: 0; left: 0; width: 100%; height: 45%; pointer-events: none; z-index: 1; opacity: 0.25; }
+        .cloud { position: absolute; background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 70%); border-radius: 50%; filter: blur(30px); animation: moveClouds linear infinite; }
+        @keyframes moveClouds { from { transform: translateX(-150%); } to { transform: translateX(500%); } }
+
+        /* ─── VISTAS ─── */
+        .views-wrapper { flex: 1; position: relative; height: 100%; }
+        .view-content {
+            position: absolute; inset: 0;
+            padding: 24px; padding-bottom: 100px;
+            overflow-y: auto;
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+            transform: scale(0.98);
+        }
+        .view-content.active { opacity: 1; visibility: visible; transform: scale(1); }
+
+        /* ─── RELOJ ─── */
+        .clock-face {
+            width: 250px; height: 250px; border-radius: 50%;
+            margin: 32px auto;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 50px; font-weight: 200;
+            position: relative;
+            background: rgba(255,255,255,0.01);
+            border: 1px solid rgba(255,255,255,0.05);
+            font-family: 'Playfair Display', serif;
+        }
+        .clock-glint {
+            position: absolute; width: 100%; height: 100%; border-radius: 50%;
+            border: 2px solid transparent;
+            border-top: 2px solid var(--glint);
+            animation: rotateGlint 4s linear infinite;
+            filter: drop-shadow(0 0 10px var(--glint));
+            transition: border-color 1s ease, filter 1s ease;
+        }
+        @keyframes rotateGlint { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* ─── ANIMACIÓN ENTRADA ─── */
+        .entry-clock { opacity: 0; transform: scale(0.92); animation: entryFade 1s ease 0.3s forwards; }
+        .entry-btn1  { opacity: 0; animation: entryFade 0.6s ease 0.9s forwards; }
+        .entry-btn2  { opacity: 0; animation: entryFade 0.6s ease 1.1s forwards; }
+        .entry-btn3  { opacity: 0; animation: entryFade 0.6s ease 1.3s forwards; }
+        .entry-title { opacity: 0; animation: entryFade 0.8s ease 0.1s forwards; }
+        @keyframes entryFade { to { opacity: 1; transform: scale(1); } }
+
+        /* ─── NAV ─── */
+        .nav-bar {
+            position: absolute; bottom: 0; width: 100%; height: 80px;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(25px);
+            display: flex; justify-content: space-around; align-items: center;
+            border-top: 1px solid rgba(255,255,255,0.05); z-index: 100;
+        }
+        .nav-item { color: #4b5563; cursor: pointer; text-align: center; font-size: 11px; transition: 0.3s; }
+        .nav-item.active { color: white; }
+        .nav-item i { font-size: 20px; display: block; margin-bottom: 4px; }
+
+        /* ─── CARDS ─── */
+        .stat-card { background: rgba(255,255,255,0.04); border-radius: 28px; padding: 20px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.04); }
+        .btn-primary { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 18px; border-radius: 22px; width: 100%; font-weight: 500; margin-bottom: 12px; transition: 0.3s; cursor: pointer; color: white; }
+        .btn-primary:active { transform: scale(0.96); background: rgba(255,255,255,0.1); }
+
+        /* ─── MODALES ─── */
+        .modal-overlay {
+            position: absolute; inset: 0;
+            background: rgba(0,0,0,0.92); backdrop-filter: blur(12px);
+            z-index: 200; display: none;
+            align-items: flex-end; justify-content: center;
+            padding: 20px;
+        }
+        .modal-overlay.flex { display: flex; animation: fadeIn 0.3s ease; }
+        .modal-card {
+            background: #0f172a; color: white;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 36px; padding: 32px; width: 100%;
+            animation: slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            max-height: 85vh; overflow-y: auto;
+        }
+        .modal-card-white {
+            background: white; color: black;
+            border-radius: 36px; padding: 36px; width: 100%;
+            animation: scaleIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes scaleIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* ─── SLEEP OVERLAY ─── */
+        #sleepOverlay {
+            position: absolute; inset: 0; z-index: 500;
+            display: none; flex-direction: column;
+            align-items: center; justify-content: center;
+            text-align: center;
+            opacity: 0; transition: opacity 0.8s ease;
+            background: #000;
+        }
+        #sleepOverlay.active { opacity: 1; display: flex; }
+
+        /* Forest scene */
+        #forestScene {
+            position: absolute; inset: 0;
+            background:
+                linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,20,40,0.5) 40%, rgba(0,0,0,0.85) 100%),
+                radial-gradient(ellipse at 50% 30%, rgba(200,220,255,0.15) 0%, transparent 60%);
+            display: flex; flex-direction: column;
+            align-items: center; padding: 50px 24px 100px;
+            overflow-y: auto;
+        }
+
+        /* SVG forest sky */
+        .forest-bg {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: -1;
+        }
+
+        #sleepFaceDown {
+            position: absolute; inset: 0;
+            background: #000;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* Analog clock in sleep */
+        #sleepAnalogClock {
+            width: 100px; height: 100px;
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 50%;
+            position: relative;
+            margin: 12px auto;
+        }
+        .clock-hand {
+            position: absolute; bottom: 50%; left: 50%;
+            transform-origin: bottom center;
+            border-radius: 4px;
+        }
+
+        /* ─── SOUND ITEMS ─── */
+        .sound-item { background: rgba(255,255,255,0.03); padding: 18px; border-radius: 22px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s; border: 1px solid transparent; margin-bottom: 10px; }
+        .sound-item:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.1); }
+        .sound-item.playing { border-color: var(--accent); background: rgba(255,255,255,0.05); }
+
+        input, select {
+            background: transparent; border: none;
+            border-bottom: 1px solid #334155;
+            padding: 10px 0; width: 100%; outline: none;
+            color: white; transition: 0.3s;
+            font-family: 'DM Sans', sans-serif; font-size: 1rem;
+        }
+        input:focus, select:focus { border-color: var(--accent); }
+        select option { background: #0f172a; color: white; }
+
+        /* ─── ALARM TOGGLE ─── */
+        .toggle-wrap { position: relative; width: 44px; height: 26px; }
+        .toggle-wrap input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute; inset: 0;
+            background: #334155; border-radius: 13px; cursor: pointer;
+            transition: 0.3s;
+        }
+        .toggle-slider:before {
+            content: ''; position: absolute;
+            width: 20px; height: 20px; border-radius: 50%;
+            background: white; left: 3px; top: 3px;
+            transition: 0.3s;
+        }
+        .toggle-wrap input:checked + .toggle-slider { background: var(--accent); }
+        .toggle-wrap input:checked + .toggle-slider:before { transform: translateX(18px); }
+
+        /* ─── SUB PANEL ALARMS ─── */
+        #alarmPanel {
+            position: absolute; inset: 0;
+            background: #000; z-index: 150;
+            display: none; flex-direction: column;
+            padding: 32px 24px 100px;
+            overflow-y: auto;
+            opacity: 0; transform: translateX(30px);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+        #alarmPanel.open {
+            display: flex; opacity: 1; transform: translateX(0);
+        }
+
+        /* ─── THEME CARDS ─── */
+        .theme-preview {
+            width: 100%; height: 80px; border-radius: 20px;
+            position: relative; overflow: hidden;
+            cursor: pointer; transition: transform 0.2s;
+            border: 2px solid transparent;
+        }
+        .theme-preview:active { transform: scale(0.95); }
+        .theme-preview.selected { border-color: white; }
+        .theme-preview-label {
+            position: absolute; bottom: 10px; left: 14px;
+            font-size: 12px; font-weight: 600; color: white;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+        }
+
+        /* ─── ORBES FLOTANTES (fondo atmosférico) ─── */
+        .orb-field { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0;
+            will-change: transform, opacity;
+        }
+        /* Orbes que van de izquierda a derecha flotando */
+        @keyframes orbDrift {
+            0%   { opacity: 0;   transform: translateX(-120px) translateY(0px) scale(0.85); }
+            12%  { opacity: 1; }
+            50%  { transform: translateX(60px) translateY(-30px) scale(1.05); }
+            88%  { opacity: 1; }
+            100% { opacity: 0;   transform: translateX(200px) translateY(15px) scale(0.9); }
+        }
+        @keyframes orbDriftSlow {
+            0%   { opacity: 0;   transform: translateX(-80px) translateY(20px) scale(0.9); }
+            15%  { opacity: 0.8; }
+            50%  { transform: translateX(80px) translateY(-20px) scale(1.08); }
+            85%  { opacity: 0.8; }
+            100% { opacity: 0;   transform: translateX(220px) translateY(10px) scale(0.85); }
+        }
+        @keyframes orbDriftFast {
+            0%   { opacity: 0;   transform: translateX(-60px) translateY(-10px) scale(0.8); }
+            10%  { opacity: 0.7; }
+            50%  { transform: translateX(100px) translateY(25px) scale(1.1); }
+            90%  { opacity: 0.7; }
+            100% { opacity: 0;   transform: translateX(240px) translateY(-5px) scale(0.88); }
+        }
+
+        /* ─── ANIMACIONES ALARMAS ─── */
+        @keyframes alarmIn {
+            from { opacity: 0; transform: translateX(24px) scale(0.96); }
+            to   { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @keyframes alarmOut {
+            from { opacity: 1; transform: translateX(0) scale(1); max-height: 100px; margin-bottom: 12px; }
+            to   { opacity: 0; transform: translateX(-24px) scale(0.95); max-height: 0; margin-bottom: 0; padding: 0; }
+        }
+        .alarm-item { animation: alarmIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) both; }
+        .alarm-item.removing { animation: alarmOut 0.3s ease forwards; }
+
+        .section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: #475569; text-transform: uppercase; margin-bottom: 14px; margin-top: 24px; }
+
+        /* Scrollbar hide */
+        .view-content::-webkit-scrollbar { display: none; }
+        .view-content { scrollbar-width: none; }
+        #alarmPanel::-webkit-scrollbar { display: none; }
+        .modal-card::-webkit-scrollbar { display: none; }
+
+        /* ─── DÍAS DE LA SEMANA ─── */
+        .day-pill {
+            width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 600; cursor: pointer;
+            transition: 0.2s; color: rgba(255,255,255,0.4);
+        }
+        .day-pill.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+        /* ─── ALARM FIRING OVERLAY ─── */
+        #alarmFiringOverlay {
+            position: absolute; inset: 0; z-index: 9999;
+            display: none; flex-direction: column;
+            align-items: center; justify-content: center;
+            text-align: center; overflow: hidden;
+            animation: alarmFadeIn 0.6s ease forwards;
+        }
+        #alarmFiringOverlay.visible { display: flex; }
+        @keyframes alarmFadeIn { from { opacity:0; } to { opacity:1; } }
+
+        .alarm-firing-bg {
+            position: absolute; inset: 0;
+            background: linear-gradient(to bottom, #1a3a5c 0%, #0d2035 40%, #050d18 100%);
+            z-index: -1;
+        }
+
+        /* Blinking clock icon */
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .alarm-clock-icon { animation: blink 1s ease-in-out infinite; }
+
+        /* Shake animation for alarm */
+        @keyframes shake {
+            0%,100%{transform:translateX(0)}
+            20%{transform:translateX(-6px)}
+            40%{transform:translateX(6px)}
+            60%{transform:translateX(-4px)}
+            80%{transform:translateX(4px)}
+        }
+        .alarm-shake { animation: shake 0.5s ease infinite; }
+
+        /* ─── FONDO FONDOS ALARMA según hora ─── */
+        /* Madrugada 0-5 */
+        .alarm-bg-midnight {
+            background: linear-gradient(to bottom, #000510 0%, #020920 40%, #050d18 100%);
+        }
+        /* Amanecer 5-8 */
+        .alarm-bg-dawn {
+            background: linear-gradient(to bottom, #1a0533 0%, #3d1156 20%, #7c2d12 55%, #f97316 80%, #fbbf24 100%);
+        }
+        /* Mañana 8-12 */
+        .alarm-bg-morning {
+            background: linear-gradient(to bottom, #1e40af 0%, #3b82f6 40%, #93c5fd 80%, #dbeafe 100%);
+        }
+        /* Tarde 12-17 */
+        .alarm-bg-afternoon {
+            background: linear-gradient(to bottom, #1d4ed8 0%, #3b82f6 30%, #60a5fa 70%, #bae6fd 100%);
+        }
+        /* Atardecer 17-20 */
+        .alarm-bg-sunset {
+            background: linear-gradient(to bottom, #1c1917 0%, #7c2d12 30%, #dc2626 55%, #f97316 75%, #fbbf24 100%);
+        }
+        /* Noche 20-24 */
+        .alarm-bg-night {
+            background: linear-gradient(to bottom, #000 0%, #0a0a1a 40%, #0d1117 100%);
+        }
+
+        /* Mountains SVG overlay for alarm */
+        .alarm-mountains {
+            position: absolute; bottom: 0; left: 0; right: 0; pointer-events: none;
+        }
+
+        /* Motivational text pulse */
+        @keyframes textPulse { 0%,100%{opacity:0.7} 50%{opacity:1} }
+        .alarm-phrase { animation: textPulse 2s ease-in-out infinite; }
+
+        /* ─── NOTIFICATION TOAST ─── */
+        #notifToast {
+            position: absolute; top: 16px; left: 12px; right: 12px;
+            background: rgba(8, 14, 28, 0.92);
+            border: 1px solid rgba(255,255,255,0.08);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border-radius: 22px;
+            padding: 0; z-index: 99999;
+            display: none;
+            overflow: hidden;
+            box-shadow: 0 12px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
+            animation: notifSlide 0.45s cubic-bezier(0.175,0.885,0.32,1.275);
+        }
+        .notif-glow-bar {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), transparent);
+            animation: notifGlowSweep 2s ease-in-out infinite;
+        }
+        @keyframes notifGlowSweep {
+            0%   { opacity: 0.4; transform: scaleX(0.6); }
+            50%  { opacity: 1;   transform: scaleX(1); }
+            100% { opacity: 0.4; transform: scaleX(0.6); }
+        }
+        .notif-body { padding: 14px 16px 16px; }
+        @keyframes notifSlide {
+            from { transform: translateY(-80px) scale(0.92); opacity: 0; }
+            to   { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes notifFadeOut {
+            from { transform: translateY(0) scale(1); opacity: 1; }
+            to   { transform: translateY(-60px) scale(0.94); opacity: 0; }
+        }
+        .notif-icon-ring {
+            width: 42px; height: 42px; border-radius: 14px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; position: relative;
+            background: linear-gradient(135deg, var(--accent) 0%, rgba(59,130,246,0.3) 100%);
+            box-shadow: 0 0 16px rgba(59,130,246,0.35);
+        }
+
+        /* ─── CUSTOM SOUND UPLOAD ─── */
+        .file-upload-label {
+            display: flex; align-items: center; gap-2; justify-content: center;
+            background: rgba(255,255,255,0.06); border: 1px dashed rgba(255,255,255,0.2);
+            border-radius: 16px; padding: 12px 20px; cursor: pointer;
+            font-size: 13px; color: rgba(255,255,255,0.6); transition: 0.2s;
+        }
+        .file-upload-label:hover { background: rgba(255,255,255,0.1); border-color: var(--accent); color: white; }
+        #customSoundInput { display: none; }
+
+        /* ─── ALARM SOUND SELECTOR ─── */
+        .alarm-sound-option {
+            display: flex; align-items: center; gap-3; padding: 12px;
+            border-radius: 14px; cursor: pointer; transition: 0.2s;
+            border: 1px solid transparent;
+        }
+        .alarm-sound-option:hover { background: rgba(255,255,255,0.06); }
+        .alarm-sound-option.selected { border-color: var(--accent); background: rgba(59,130,246,0.1); }
+        .alarm-sound-option .preview-btn {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: rgba(255,255,255,0.08); border: none; color: white;
+            font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: 0.2s; flex-shrink: 0;
+        }
+        .alarm-sound-option .preview-btn:hover { background: var(--accent); }
+    </style>
+</head>
+<body>
+
+<div class="phone-frame theme-medianoche" id="appFrame">
+    <!-- Theme flash overlay -->
+    <div class="theme-flash" id="themeFlash"></div>
+
+    <!-- Orbes flotantes atmosféricos -->
+    <div class="orb-field" id="orbField"></div>
+    <div class="cloud-container" id="cloudBox"></div>
+
+    <div class="views-wrapper">
+
+        <!-- ════════════ VISTA: DORMIR ════════════ -->
+        <div id="view-dormir" class="view-content active">
+            <div class="entry-title">
+                <h2 class="text-3xl font-light mt-8 mb-1" style="font-family:'Playfair Display',serif;">Buenas Noches</h2>
+                <p class="text-slate-500 text-sm mb-4" id="currentDateDisplay">Cargando...</p>
+            </div>
+
+            <div class="clock-face entry-clock">
+                <div class="clock-glint" id="clockGlint"></div>
+                <span id="digitalTime" style="font-family:'Playfair Display',serif; letter-spacing:-2px;">00:00</span>
+            </div>
+
+            <div class="mt-8 space-y-2">
+                <button onclick="openSleepModal()" class="btn-primary entry-btn1">
+                    <i class="fa-solid fa-clock-rotate-left mr-2 opacity-60"></i> Establecer horas de dormir
+                </button>
+                <button onclick="startDeepSleep()" class="btn-primary entry-btn2" style="border-color:rgba(var(--accent-rgb,59,130,246),0.4); background:rgba(var(--accent-rgb,59,130,246),0.08); color: var(--accent2);">
+                    <i class="fa-solid fa-moon mr-2"></i> Dormir profundamente
+                </button>
+                <div id="activeSleepInfo" class="entry-btn3 text-center text-xs text-slate-500 mt-2 opacity-0 transition-opacity">
+                    Despertar a las <span id="savedSleepTime" class="text-white font-bold">--:--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ════════════ VISTA: ASPECTO ════════════ -->
+        <div id="view-aspecto" class="view-content">
+            <h1 class="text-3xl font-bold mb-2" style="font-family:'Playfair Display',serif;">Aspecto</h1>
+            <p class="text-slate-500 text-xs mb-6">Personaliza tu experiencia nocturna</p>
+
+            <p class="section-label">Temas Atmosféricos</p>
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="theme-preview selected" id="tp-medianoche" onclick="setTheme('medianoche')" style="background: #000;">
+                    <div style="position:absolute;inset:0;background:radial-gradient(circle at 70% 30%, rgba(59,130,246,0.15),transparent);"></div>
+                    <i class="fa-solid fa-moon absolute top-3 right-3 text-blue-400 text-xs"></i>
+                    <div class="theme-preview-label">Medianoche</div>
+                </div>
+                <div class="theme-preview" id="tp-estrellas" onclick="setTheme('estrellas')" style="background: radial-gradient(circle at 50% 30%, #0f172a, #000);">
+                    <i class="fa-solid fa-star absolute top-3 right-3 text-yellow-200 text-xs"></i>
+                    <div class="theme-preview-label">Estrellas</div>
+                </div>
+                <div class="theme-preview" id="tp-nebuloso" onclick="setTheme('nebuloso')" style="background: linear-gradient(135deg, #1e1b4b, #020617);">
+                    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%, rgba(129,140,248,0.3),transparent 60%);"></div>
+                    <i class="fa-solid fa-cloud absolute top-3 right-3 text-indigo-300 text-xs"></i>
+                    <div class="theme-preview-label">Nebuloso</div>
+                </div>
+                <div class="theme-preview" id="tp-lunallena" onclick="setTheme('lunallena')" style="background: radial-gradient(circle at 50% 20%, #1e293b, #000);">
+                    <div style="position:absolute;width:30px;height:30px;border-radius:50%;background:rgba(226,232,240,0.2);top:20px;right:20px;box-shadow:0 0 20px rgba(226,232,240,0.3);"></div>
+                    <div class="theme-preview-label">Luna Llena</div>
+                </div>
+                <div class="theme-preview" id="tp-galaxia" onclick="setTheme('galaxia')" style="background: linear-gradient(135deg, #1e1b4b, #2e1065, #000);">
+                    <div style="position:absolute;inset:0;background:radial-gradient(circle at 30% 50%, rgba(192,132,252,0.2),transparent 50%);"></div>
+                    <i class="fa-solid fa-atom absolute top-3 right-3 text-purple-300 text-xs"></i>
+                    <div class="theme-preview-label">Galaxia</div>
+                </div>
+                <div class="theme-preview" id="tp-atardecer" onclick="setTheme('atardecer')" style="background: linear-gradient(to bottom, #7c2d12, #4c1d95, #000);">
+                    <i class="fa-solid fa-sun absolute top-3 right-3 text-orange-400 text-xs"></i>
+                    <div class="theme-preview-label">Atardecer</div>
+                </div>
+            </div>
+
+            <p class="section-label">Sonidos Ambientales</p>
+            <div class="space-y-2">
+                <!-- Olas del mar -->
+                <div class="sound-item" id="snd-relajantes" onclick="toggleSound('relajantes')">
+                    <div class="flex items-center gap-4">
+                        <i class="fa-solid fa-water text-teal-400 text-lg"></i>
+                        <div>
+                            <p class="text-sm font-medium">Olas del Mar</p>
+                            <p class="text-[10px] text-slate-500">Oleaje suave y profundo</p>
+                        </div>
+                    </div>
+                    <i id="snd-relajantes-icon" class="fa-solid fa-play text-[10px] opacity-40"></i>
+                </div>
+                <!-- Brisa -->
+                <div class="sound-item" id="snd-mananeros" onclick="toggleSound('mananeros')">
+                    <div class="flex items-center gap-4">
+                        <i class="fa-solid fa-feather text-amber-400 text-lg"></i>
+                        <div>
+                            <p class="text-sm font-medium">Brisa Forestal</p>
+                            <p class="text-[10px] text-slate-500">Viento entre árboles</p>
+                        </div>
+                    </div>
+                    <i id="snd-mananeros-icon" class="fa-solid fa-play text-[10px] opacity-40"></i>
+                </div>
+                <!-- Lluvia -->
+                <div class="sound-item" id="snd-tranquilos" onclick="toggleSound('tranquilos')">
+                    <div class="flex items-center gap-4">
+                        <i class="fa-solid fa-cloud-rain text-blue-300 text-lg"></i>
+                        <div>
+                            <p class="text-sm font-medium">Lluvia Suave</p>
+                            <p class="text-[10px] text-slate-500">Lluvia relajante sobre hojas</p>
+                        </div>
+                    </div>
+                    <i id="snd-tranquilos-icon" class="fa-solid fa-play text-[10px] opacity-40"></i>
+                </div>
+                <!-- Río -->
+                <div class="sound-item" id="snd-rio" onclick="toggleSound('rio')">
+                    <div class="flex items-center gap-4">
+                        <i class="fa-solid fa-person-swimming text-cyan-400 text-lg"></i>
+                        <div>
+                            <p class="text-sm font-medium">Río de Montaña</p>
+                            <p class="text-[10px] text-slate-500">Corriente cristalina entre piedras</p>
+                        </div>
+                    </div>
+                    <i id="snd-rio-icon" class="fa-solid fa-play text-[10px] opacity-40"></i>
+                </div>
+                <!-- Cueva -->
+                <div class="sound-item" id="snd-cueva" onclick="toggleSound('cueva')">
+                    <div class="flex items-center gap-4">
+                        <i class="fa-solid fa-droplet text-indigo-300 text-lg"></i>
+                        <div>
+                            <p class="text-sm font-medium">Gotas de Cueva</p>
+                            <p class="text-[10px] text-slate-500">Gotas en silencio profundo</p>
+                        </div>
+                    </div>
+                    <i id="snd-cueva-icon" class="fa-solid fa-play text-[10px] opacity-40"></i>
+                </div>
+                <!-- Fogata -->
+                <div class="sound-item" id="snd-fogata" onclick="toggleSound('fogata')">
+                    <div class="flex items-center gap-4">
+                        <i class="fa-solid fa-fire text-orange-400 text-lg"></i>
+                        <div>
+                            <p class="text-sm font-medium">Fogata Crepitante</p>
+                            <p class="text-[10px] text-slate-500">Madera ardiendo lentamente</p>
+                        </div>
+                    </div>
+                    <i id="snd-fogata-icon" class="fa-solid fa-play text-[10px] opacity-40"></i>
+                </div>
+                <!-- Pajaros -->
+                <div class="sound-item" id="snd-pajaros" onclick="toggleSound('pajaros')">
+                    <div class="flex items-center gap-4">
+                        <i class="fa-solid fa-dove text-emerald-300 text-lg"></i>
+                        <div>
+                            <p class="text-sm font-medium">Aves del Amanecer</p>
+                            <p class="text-[10px] text-slate-500">Cantos suaves de bosque</p>
+                        </div>
+                    </div>
+                    <i id="snd-pajaros-icon" class="fa-solid fa-play text-[10px] opacity-40"></i>
+                </div>
+                <!-- Frecuencia -->
+                <div class="sound-item" id="snd-frecuencia" onclick="toggleSound('frecuencia')">
+                    <div class="flex items-center gap-4">
+                        <i class="fa-solid fa-wave-square text-violet-400 text-lg"></i>
+                        <div>
+                            <p class="text-sm font-medium">432 Hz · Sanación</p>
+                            <p class="text-[10px] text-slate-500">Frecuencia de relajación profunda</p>
+                        </div>
+                    </div>
+                    <i id="snd-frecuencia-icon" class="fa-solid fa-play text-[10px] opacity-40"></i>
+                </div>
+                <!-- Bol tibetano -->
+                <div class="sound-item" id="snd-bol" onclick="toggleSound('bol')">
+                    <div class="flex items-center gap-4">
+                        <i class="fa-solid fa-circle-dot text-rose-300 text-lg"></i>
+                        <div>
+                            <p class="text-sm font-medium">Bol Tibetano</p>
+                            <p class="text-[10px] text-slate-500">Resonancia meditativa</p>
+                        </div>
+                    </div>
+                    <i id="snd-bol-icon" class="fa-solid fa-play text-[10px] opacity-40"></i>
+                </div>
+                <!-- Tormenta -->
+                <div class="sound-item" id="snd-tormenta" onclick="toggleSound('tormenta')">
+                    <div class="flex items-center gap-4">
+                        <i class="fa-solid fa-cloud-bolt text-yellow-400 text-lg"></i>
+                        <div>
+                            <p class="text-sm font-medium">Tormenta Lejana</p>
+                            <p class="text-[10px] text-slate-500">Truenos distantes con lluvia</p>
+                        </div>
+                    </div>
+                    <i id="snd-tormenta-icon" class="fa-solid fa-play text-[10px] opacity-40"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- ════════════ VISTA: ESTADO ════════════ -->
+        <div id="view-estadistica" class="view-content">
+            <h1 class="text-3xl font-bold mb-2" style="font-family:'Playfair Display',serif;">Estado</h1>
+            <p class="text-slate-500 text-xs mb-6">Resumen de tu última noche</p>
+
+            <div class="stat-card" style="background:rgba(255,255,255,0.05);">
+                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-2">Horas Dormidas</p>
+                <div class="flex justify-between items-end mb-4">
+                    <p id="statTime" class="text-4xl font-bold" style="font-family:'Playfair Display',serif;">0h 00m</p>
+                    <span class="text-sm font-medium mb-1" style="color:var(--accent2);">+12% vs ayer</span>
+                </div>
+                <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                    <div id="sleepProgress" class="h-full rounded-full w-0 transition-all duration-1000" style="background:var(--accent);"></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="stat-card text-center !py-6">
+                    <i class="fa-solid fa-snooze text-blue-400 mb-2 text-lg"></i>
+                    <span class="text-[10px] text-slate-400 uppercase block mb-1">Ronquidos</span>
+                    <span id="statSnore" class="text-2xl font-bold">0 min</span>
+                </div>
+                <div class="stat-card text-center !py-6">
+                    <i class="fa-solid fa-comments text-purple-400 mb-2 text-lg"></i>
+                    <span class="text-[10px] text-slate-400 uppercase block mb-1">Habla</span>
+                    <span id="statTalk" class="text-2xl font-bold">0 vez</span>
+                </div>
+            </div>
+
+            <button onclick="openHistoryModal()" class="w-full py-4 rounded-3xl font-bold text-lg mb-4 transition-transform active:scale-95" style="background:white;color:black;">
+                ¿Qué hiciste anoche?
+            </button>
+
+            <div class="stat-card">
+                <h3 class="text-xs text-slate-500 mb-3">Nivel de Ruido</h3>
+                <canvas id="micVisualizer" class="w-full" height="80"></canvas>
+            </div>
+
+            <!-- ── BARRA SEMANAL ── -->
+            <div class="stat-card" style="margin-top:16px;">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xs text-slate-500 uppercase font-bold tracking-widest">Esta Semana</h3>
+                    <span id="weekAvgLabel" class="text-[10px]" style="color:var(--accent2);">Promedio: 0h</span>
+                </div>
+                <div id="weekBars" style="display:flex; align-items:flex-end; justify-content:space-between; height:110px; gap:6px;">
+                    <!-- JS rellena esto -->
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-top:6px;">
+                    <span class="text-[9px] text-slate-600">Lu</span>
+                    <span class="text-[9px] text-slate-600">Ma</span>
+                    <span class="text-[9px] text-slate-600">Mi</span>
+                    <span class="text-[9px] text-slate-600">Ju</span>
+                    <span class="text-[9px] text-slate-600">Vi</span>
+                    <span class="text-[9px] text-slate-600">Sá</span>
+                    <span class="text-[9px] text-slate-600">Do</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ════════════ VISTA: PERFIL ════════════ -->
+        <div id="view-perfil" class="view-content">
+            <h1 class="text-3xl font-bold mb-8" style="font-family:'Playfair Display',serif;">Perfil</h1>
+
+            <div class="flex flex-col items-center mb-8">
+                <div class="relative">
+                    <div class="w-24 h-24 rounded-full bg-slate-800 border-2 border-white/10 flex items-center justify-center text-4xl overflow-hidden shadow-2xl">
+                        <i class="fa-solid fa-user text-slate-500"></i>
+                    </div>
+                    <div class="absolute bottom-0 right-0 w-8 h-8 rounded-full flex items-center justify-center border-4 border-black" style="background:var(--accent);">
+                        <i class="fa-solid fa-camera text-[9px]"></i>
+                    </div>
+                </div>
+                <h2 id="displayUserName" class="text-xl font-bold mt-4">Usuario</h2>
+                <span class="text-[10px] font-bold uppercase tracking-widest mt-1" style="color:var(--accent2);">Usuario Pro</span>
+            </div>
+
+            <div class="stat-card !p-5 mb-4">
+                <div class="space-y-5">
+                    <div>
+                        <label class="text-[10px] text-slate-500 uppercase font-bold mb-1 block">Nombre</label>
+                        <input type="text" id="userName" value="Pereoño" oninput="document.getElementById('displayUserName').textContent=this.value">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-500 uppercase font-bold mb-1 block">Edad</label>
+                        <input type="number" id="userAge" value="25">
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-2 mb-6">
+                <button onclick="openPersonalizacion()" class="btn-primary !mb-0 !py-4 flex justify-between items-center px-5">
+                    <span class="flex items-center gap-3"><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent2);"></i> Personalización</span>
+                    <i class="fa-solid fa-chevron-right text-[10px] opacity-30"></i>
+                </button>
+                <button onclick="openPermisos()" class="btn-primary !mb-0 !py-4 flex justify-between items-center px-5">
+                    <span class="flex items-center gap-3"><i class="fa-solid fa-fingerprint text-amber-400"></i> Permisos</span>
+                    <i class="fa-solid fa-chevron-right text-[10px] opacity-30"></i>
+                </button>
+                <button onclick="openAlarmas()" class="btn-primary !mb-0 !py-4 flex justify-between items-center px-5">
+                    <span class="flex items-center gap-3"><i class="fa-solid fa-bell text-rose-400"></i> Alarmas</span>
+                    <i class="fa-solid fa-chevron-right text-[10px] opacity-30"></i>
+                </button>
+            </div>
+
+            <button onclick="saveProfile()" class="w-full py-4 rounded-3xl font-bold text-lg transition-all shadow-lg" style="background:var(--accent);">
+                Guardar Configuración
+            </button>
+        </div>
+    </div>
+
+    <!-- ════════════ NAV BAR ════════════ -->
+    <nav class="nav-bar">
+        <div class="nav-item active" id="nav-dormir" onclick="switchView('dormir')">
+            <i class="fa-solid fa-moon"></i>Dormir
+        </div>
+        <div class="nav-item" id="nav-aspecto" onclick="switchView('aspecto')">
+            <i class="fa-solid fa-palette"></i>Aspecto
+        </div>
+        <div class="nav-item" id="nav-estadistica" onclick="switchView('estadistica')">
+            <i class="fa-solid fa-chart-line"></i>Estado
+        </div>
+        <div class="nav-item" id="nav-perfil" onclick="switchView('perfil')">
+            <i class="fa-solid fa-user"></i>Perfil
+        </div>
+    </nav>
+
+    <!-- ════════════ PANEL ALARMAS ════════════ -->
+    <div id="alarmPanel">
+        <div class="flex items-center gap-4 mb-8">
+            <button onclick="closeAlarmas()" class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
+                <i class="fa-solid fa-arrow-left text-sm"></i>
+            </button>
+            <h2 class="text-2xl font-bold" style="font-family:'Playfair Display',serif;">Alarmas</h2>
+        </div>
+
+        <div id="alarmList" class="space-y-3 mb-6"></div>
+
+        <button onclick="openAddAlarm()" class="w-full py-4 rounded-3xl font-bold text-lg" style="background:var(--accent);">
+            <i class="fa-solid fa-plus mr-2"></i> Agregar Alarma
+        </button>
+    </div>
+
+    <!-- ════════════ SLEEP OVERLAY ════════════ -->
+    <div id="sleepOverlay">
+        <!-- Face down screen -->
+        <div id="sleepFaceDown" style="display:flex;">
+            <div class="text-center">
+                <div class="w-16 h-16 rounded-full border border-white/5 flex items-center justify-center mx-auto mb-4 animate-pulse">
+                    <i class="fa-solid fa-moon text-white/10 text-2xl"></i>
+                </div>
+                <p class="text-white/20 text-sm">Monitorando tu sueño...</p>
+                <p class="text-white/10 text-xs mt-2">Voltea el teléfono boca arriba para ver</p>
+            </div>
+        </div>
+
+        <!-- Face up: Forest scene -->
+        <div id="forestScene" style="display:none; width:100%; min-height:100%;">
+            <!-- SVG forest + moon background -->
+            <svg class="forest-bg" viewBox="0 0 412 892" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <radialGradient id="moonGlow" cx="50%" cy="22%" r="25%">
+                        <stop offset="0%" stop-color="#d4e8ff" stop-opacity="0.35"/>
+                        <stop offset="100%" stop-color="transparent"/>
+                    </radialGradient>
+                    <radialGradient id="bgGrad" cx="50%" cy="40%" r="80%">
+                        <stop offset="0%" stop-color="#0a1628"/>
+                        <stop offset="100%" stop-color="#000510"/>
+                    </radialGradient>
+                </defs>
+                <rect width="412" height="892" fill="url(#bgGrad)"/>
+                <rect width="412" height="892" fill="url(#moonGlow)"/>
+                <circle cx="60" cy="80" r="1.5" fill="white" opacity="0.6"/>
+                <circle cx="150" cy="50" r="1" fill="white" opacity="0.5"/>
+                <circle cx="280" cy="90" r="1.5" fill="white" opacity="0.7"/>
+                <circle cx="340" cy="40" r="1" fill="white" opacity="0.4"/>
+                <circle cx="90" cy="130" r="1" fill="white" opacity="0.5"/>
+                <circle cx="370" cy="120" r="1.5" fill="white" opacity="0.6"/>
+                <circle cx="30" cy="200" r="1" fill="white" opacity="0.4"/>
+                <circle cx="200" cy="150" r="1" fill="white" opacity="0.3"/>
+                <circle cx="320" cy="170" r="1" fill="white" opacity="0.5"/>
+                <circle cx="206" cy="160" r="55" fill="#d8e8f8" opacity="0.12"/>
+                <circle cx="206" cy="160" r="42" fill="#e8f2ff" opacity="0.1"/>
+                <circle cx="206" cy="160" r="30" fill="#f0f6ff" opacity="0.15"/>
+                <polygon points="0,650 100,420 200,600 300,380 412,580 412,892 0,892" fill="#050d18" opacity="0.95"/>
+                <polygon points="20,700 50,580 80,700" fill="#030c16"/>
+                <polygon points="60,720 100,560 140,720" fill="#040e1a"/>
+                <polygon points="120,710 155,590 190,710" fill="#030c16"/>
+                <polygon points="0,750 30,640 60,750" fill="#020a12"/>
+                <polygon points="280,700 310,575 340,700" fill="#030c16"/>
+                <polygon points="320,720 360,560 400,720" fill="#040e1a"/>
+                <polygon points="360,740 395,620 412,740" fill="#030c16"/>
+                <rect x="0" y="800" width="412" height="92" fill="url(#bgGrad)" opacity="0.7"/>
+            </svg>
+
+            <!-- Content overlay -->
+            <div class="relative z-10 flex flex-col items-center w-full text-center" style="padding-top: 40px;">
+                <div id="sleepBigTime" class="text-6xl font-extralight mb-1" style="font-family:'Playfair Display',serif; letter-spacing:-2px; text-shadow:0 0 30px rgba(200,220,255,0.4);">00:00</div>
+                <div id="sleepSeconds" class="text-2xl font-light text-white/40 mb-2" style="font-family:'DM Sans',sans-serif;">:00</div>
+                <div id="sleepDay" class="text-sm text-white/40 tracking-widest uppercase mb-6">Sábado</div>
+
+                <div id="sleepAnalogClock">
+                    <div class="clock-hand" id="hourHand" style="width:2px;height:26px;background:white;margin-left:-1px;"></div>
+                    <div class="clock-hand" id="minuteHand" style="width:1.5px;height:34px;background:rgba(255,255,255,0.7);margin-left:-0.75px;"></div>
+                    <div class="clock-hand" id="secondHand" style="width:1px;height:38px;background:rgba(200,220,255,0.5);margin-left:-0.5px;"></div>
+                    <div style="position:absolute;width:6px;height:6px;background:white;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);"></div>
+                </div>
+
+                <p id="sleepPhrase" class="text-white/30 text-sm italic mb-6 px-10" style="font-family:'Playfair Display',serif; line-height:1.6;"></p>
+
+                <div class="grid grid-cols-3 gap-3 w-full px-4 mb-6">
+                    <div class="rounded-2xl p-3" style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06);">
+                        <p class="text-[9px] text-white/30 uppercase tracking-wide mb-1">Durmiendo</p>
+                        <p id="sleepElapsed" class="text-lg font-light">0h 0m</p>
+                    </div>
+                    <div class="rounded-2xl p-3" style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06);">
+                        <p class="text-[9px] text-white/30 uppercase tracking-wide mb-1">Ronquidos</p>
+                        <p class="text-lg font-light">0 min</p>
+                    </div>
+                    <div class="rounded-2xl p-3" style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06);">
+                        <p class="text-[9px] text-white/30 uppercase tracking-wide mb-1">Ruido</p>
+                        <p class="text-lg font-light">Bajo</p>
+                    </div>
+                </div>
+
+                <div id="sleepCounter" class="text-3xl font-bold mb-8 tracking-tight text-white/60" style="font-family:'Playfair Display',serif;">00:00:00</div>
+
+                <button onclick="stopDeepSleep()" class="px-10 py-3 rounded-full transition-all duration-500" style="border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.25);" onmouseover="this.style.color='white';this.style.borderColor='rgba(255,255,255,0.4)'" onmouseout="this.style.color='rgba(255,255,255,0.25)';this.style.borderColor='rgba(255,255,255,0.1)'">
+                    Despertar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════ ALARM FIRING OVERLAY ════════════ -->
+    <div id="alarmFiringOverlay">
+        <div class="alarm-firing-bg" id="alarmFiringBg"></div>
+
+        <!-- Snow mountains SVG -->
+        <svg style="position:absolute;bottom:0;left:0;right:0;width:100%;pointer-events:none;" viewBox="0 0 412 300" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="snowGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="white" stop-opacity="0.9"/>
+                    <stop offset="30%" stop-color="#e0eaf5" stop-opacity="0.7"/>
+                    <stop offset="100%" stop-color="#0a1628" stop-opacity="0.95"/>
+                </linearGradient>
+                <linearGradient id="mtnGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#1a2a3a" stop-opacity="0.95"/>
+                    <stop offset="100%" stop-color="#050d18" stop-opacity="1"/>
+                </linearGradient>
+            </defs>
+            <!-- Back mountains -->
+            <polygon points="0,220 80,100 160,180 240,80 320,160 412,90 412,300 0,300" fill="url(#mtnGrad)" opacity="0.7"/>
+            <!-- Front mountains -->
+            <polygon points="0,250 60,140 130,210 200,120 280,200 360,130 412,170 412,300 0,300" fill="#0a1628" opacity="0.95"/>
+            <!-- Snow caps -->
+            <polygon points="60,140 75,160 45,160" fill="url(#snowGrad)" opacity="0.85"/>
+            <polygon points="200,120 220,148 180,148" fill="url(#snowGrad)" opacity="0.9"/>
+            <polygon points="360,130 378,158 342,158" fill="url(#snowGrad)" opacity="0.8"/>
+            <polygon points="80,100 95,125 65,125" fill="url(#snowGrad)" opacity="0.7"/>
+            <polygon points="240,80 258,108 222,108" fill="url(#snowGrad)" opacity="0.85"/>
+        </svg>
+
+        <!-- Stars on alarm bg -->
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;" id="alarmStars"></div>
+
+        <!-- Content -->
+        <div class="relative z-10 flex flex-col items-center px-8 pt-16" style="width:100%;">
+            <!-- Clock icon blinking -->
+            <div class="alarm-clock-icon alarm-shake mb-6" style="font-size:64px; filter:drop-shadow(0 0 24px rgba(255,255,255,0.6));">
+                🕰️
+            </div>
+
+            <p style="font-size:13px; letter-spacing:0.2em; text-transform:uppercase; color:rgba(255,255,255,0.5); margin-bottom:8px;">¡DESPIERTA!</p>
+            <h2 style="font-family:'Playfair Display',serif; font-size:28px; font-weight:300; margin-bottom:4px; text-shadow:0 0 20px rgba(255,255,255,0.4);">Ha sonado tu alarma</h2>
+            <p id="alarmFiringLabel" style="font-size:14px; color:rgba(255,255,255,0.45); margin-bottom:32px;"></p>
+
+            <!-- Current time -->
+            <div id="alarmFiringTime" style="font-family:'Playfair Display',serif; font-size:72px; font-weight:200; letter-spacing:-3px; line-height:1; margin-bottom:8px; text-shadow:0 4px 40px rgba(255,255,255,0.3);">00:00</div>
+
+            <!-- Motivational phrase -->
+            <p id="alarmMotivPhrase" class="alarm-phrase" style="font-family:'Playfair Display',serif; font-size:15px; font-style:italic; color:rgba(255,255,255,0.55); text-align:center; line-height:1.6; margin-bottom:40px; max-width:280px;"></p>
+
+            <!-- Dismiss button -->
+            <button onclick="dismissAlarm()" style="padding:16px 48px; border-radius:50px; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.25); color:white; font-size:16px; font-weight:600; cursor:pointer; backdrop-filter:blur(10px); transition:0.3s; letter-spacing:0.05em;" onmouseover="this.style.background='rgba(255,255,255,0.22)'" onmouseout="this.style.background='rgba(255,255,255,0.12)'">
+                Detener Alarma
+            </button>
+            <button onclick="snoozeAlarm()" style="margin-top:14px; padding:12px 36px; border-radius:50px; background:transparent; border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.4); font-size:13px; cursor:pointer; transition:0.3s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
+                <i class="fa-solid fa-snooze mr-2"></i> Posponer 5 min
+            </button>
+        </div>
+    </div>
+
+    <!-- ════════════ NOTIFICATION TOAST ════════════ -->
+    <div id="notifToast">
+        <div class="notif-glow-bar"></div>
+        <div class="notif-body">
+            <div style="display:flex; align-items:flex-start; gap:12px;">
+                <div class="notif-icon-ring" id="notifToastIcon">🌙</div>
+                <div style="flex:1; min-width:0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                        <p id="notifToastTitle" style="font-size:12px;font-weight:700;margin:0; letter-spacing:0.02em;">Sleep Deep</p>
+                        <span id="notifToastTime" style="font-size:10px; color:rgba(255,255,255,0.3); flex-shrink:0; margin-left:8px;"></span>
+                    </div>
+                    <p id="notifToastText" style="font-size:12px;color:rgba(255,255,255,0.55);margin:0; line-height:1.4;"></p>
+                </div>
+                <button onclick="hideNotifToast()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.35);font-size:11px;cursor:pointer;padding:4px 8px;border-radius:8px;flex-shrink:0;transition:0.2s;">✕</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════ MODAL: HORA SUEÑO ════════════ -->
+    <div id="modalSleep" class="modal-overlay" onclick="if(event.target===this)closeModal('modalSleep')">
+        <div class="modal-card">
+            <h2 class="text-2xl font-bold mb-1">Configurar Sueño</h2>
+            <p class="text-slate-400 text-sm mb-6">Define tu horario ideal de descanso</p>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] text-slate-400 uppercase font-bold block mb-1">Hora de dormir</label>
+                    <input type="time" id="bedtimeInput" value="22:00" style="color:white;font-size:1.1rem;">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-400 uppercase font-bold block mb-1">Hora de despertar</label>
+                    <input type="time" id="wakeTimeInput" value="06:30" style="color:white;font-size:1.1rem;">
+                </div>
+            </div>
+            <button onclick="saveSleepTime()" class="w-full mt-8 py-4 rounded-2xl font-bold text-lg" style="background:var(--accent);">
+                Guardar
+            </button>
+        </div>
+    </div>
+
+    <!-- ════════════ MODAL: HISTORIAL ════════════ -->
+    <div id="modalHistory" class="modal-overlay" onclick="if(event.target===this)closeModal('modalHistory')">
+        <div class="modal-card" style="max-height:88vh;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <div>
+                    <h2 class="text-2xl font-bold" style="font-family:'Playfair Display',serif;">Tu Noche</h2>
+                    <p id="historyDateLabel" style="font-size:11px; color:rgba(255,255,255,0.35); margin-top:2px;"></p>
+                </div>
+                <button onclick="closeModal('modalHistory')" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;">✕</button>
+            </div>
+
+            <!-- Timeline de eventos -->
+            <div id="nightTimeline" style="margin-bottom:20px;"></div>
+
+            <!-- Grabaciones de audio -->
+            <div id="audioSection" style="display:none;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                    <div style="flex:1;height:1px;background:rgba(255,255,255,0.06);"></div>
+                    <span style="font-size:10px;font-weight:700;letter-spacing:0.12em;color:#475569;text-transform:uppercase;">Sonidos de la Noche</span>
+                    <div style="flex:1;height:1px;background:rgba(255,255,255,0.06);"></div>
+                </div>
+                <p style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:12px;">Escucha y decide qué guardar. Los que no guardes se borran al cerrar.</p>
+                <div id="audioRecordingsList"></div>
+            </div>
+
+            <!-- Botón micrófono si no hay datos -->
+            <div id="noSleepDataMsg" style="text-align:center;padding:24px 0;display:none;">
+                <div style="font-size:48px;margin-bottom:12px;">🌙</div>
+                <p style="color:rgba(255,255,255,0.5);font-size:14px;">Aún no tienes datos de esta noche</p>
+                <p style="color:rgba(255,255,255,0.25);font-size:12px;margin-top:6px;">Activa "Dormir profundamente" para que la app registre tu sueño</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════ MODAL: SONIDO INFO ════════════ -->
+    <div id="modalSound" class="modal-overlay" onclick="if(event.target===this)closeModal('modalSound')">
+        <div class="modal-card">
+            <h2 class="text-xl font-bold mb-2" id="soundModalTitle">Sonido</h2>
+            <p class="text-slate-400 text-sm mb-6" id="soundModalDesc">...</p>
+            <button onclick="closeModal('modalSound')" class="w-full py-4 rounded-2xl font-bold" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- ════════════ MODAL: PERSONALIZACIÓN ════════════ -->
+    <div id="modalPersonalizacion" class="modal-overlay" onclick="if(event.target===this)closeModal('modalPersonalizacion')">
+        <div class="modal-card">
+            <h2 class="text-2xl font-bold mb-6">Personalización</h2>
+            <div class="space-y-5">
+                <div>
+                    <label class="text-[10px] text-slate-400 uppercase font-bold block mb-1">País</label>
+                    <select style="color:white;background:transparent;border-bottom:1px solid #334155;padding:10px 0;width:100%;outline:none;">
+                        <option value="co">🇨🇴 Colombia</option>
+                        <option value="mx">🇲🇽 México</option>
+                        <option value="ar">🇦🇷 Argentina</option>
+                        <option value="es">🇪🇸 España</option>
+                        <option value="us">🇺🇸 Estados Unidos</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-400 uppercase font-bold block mb-1">Edad</label>
+                    <input type="number" id="persAge" value="25">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-400 uppercase font-bold block mb-1">Hora Residencial (zona horaria)</label>
+                    <select style="color:white;background:transparent;border-bottom:1px solid #334155;padding:10px 0;width:100%;outline:none;">
+                        <option>America/Bogota (UTC-5)</option>
+                        <option>America/Mexico_City (UTC-6)</option>
+                        <option>America/Argentina/Buenos_Aires (UTC-3)</option>
+                        <option>Europe/Madrid (UTC+1)</option>
+                        <option>America/New_York (UTC-5)</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="closeModal('modalPersonalizacion')" class="w-full mt-8 py-4 rounded-2xl font-bold text-lg" style="background:var(--accent);">Guardar</button>
+        </div>
+    </div>
+
+    <!-- ════════════ MODAL: PERMISOS ════════════ -->
+    <div id="modalPermisos" class="modal-overlay" onclick="if(event.target===this)closeModal('modalPermisos')">
+        <div class="modal-card">
+            <h2 class="text-2xl font-bold mb-6">Permisos</h2>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center py-3 border-b border-white/5">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-microphone text-blue-400"></i>
+                        <div><p class="text-sm font-medium">Micrófono</p><p class="text-[10px] text-slate-500">Para detectar ronquidos y ruidos</p></div>
+                    </div>
+                    <label class="toggle-wrap"><input type="checkbox" id="permMic" onchange="requestMicPermission(this)"><span class="toggle-slider"></span></label>
+                </div>
+                <div class="flex justify-between items-center py-3 border-b border-white/5">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-bell text-amber-400"></i>
+                        <div><p class="text-sm font-medium">Notificaciones</p><p class="text-[10px] text-slate-500">Para alarmas y recordatorios</p></div>
+                    </div>
+                    <label class="toggle-wrap"><input type="checkbox" id="permNotif" checked onchange="requestNotifPermission(this)"><span class="toggle-slider"></span></label>
+                </div>
+                <div class="flex justify-between items-center py-3 border-b border-white/5">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-clock text-amber-400"></i>
+                        <div><p class="text-sm font-medium">Reloj & Alarmas</p><p class="text-[10px] text-slate-500">Para gestionar alarmas del sistema</p></div>
+                    </div>
+                    <label class="toggle-wrap"><input type="checkbox" id="permClock" checked onchange="requestClockPermission(this)"><span class="toggle-slider"></span></label>
+                </div>
+                <div class="flex justify-between items-center py-3">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-rotate text-green-400"></i>
+                        <div><p class="text-sm font-medium">Giroscopio</p><p class="text-[10px] text-slate-500">Para detectar posición del teléfono</p></div>
+                    </div>
+                    <label class="toggle-wrap"><input type="checkbox" id="permGyro" checked onchange="requestGyroPermission(this)"><span class="toggle-slider"></span></label>
+                </div>
+            </div>
+            <button onclick="closeModal('modalPermisos')" class="w-full mt-8 py-4 rounded-2xl font-bold text-lg" style="background:var(--accent);">Listo</button>
+        </div>
+    </div>
+
+    <!-- ════════════ MODAL: AGREGAR ALARMA ════════════ -->
+    <div id="modalAddAlarm" class="modal-overlay" onclick="if(event.target===this)closeModal('modalAddAlarm')">
+        <div class="modal-card">
+            <h2 class="text-2xl font-bold mb-6">Nueva Alarma</h2>
+            <div class="space-y-5">
+                <!-- Hora -->
+                <div>
+                    <label class="text-[10px] text-slate-400 uppercase font-bold block mb-1">Hora</label>
+                    <input type="time" id="newAlarmTime" value="07:00" style="color:white;font-size:1.4rem;font-weight:300;">
+                </div>
+                <!-- Etiqueta -->
+                <div>
+                    <label class="text-[10px] text-slate-400 uppercase font-bold block mb-1">Etiqueta</label>
+                    <input type="text" id="newAlarmLabel" placeholder="Buenos días..." style="color:white;">
+                </div>
+                <!-- Días -->
+                <div>
+                    <label class="text-[10px] text-slate-400 uppercase font-bold block mb-3">Repetir</label>
+                    <div class="flex gap-2 justify-between" id="dayPillsContainer">
+                        <div class="day-pill" data-day="1" onclick="toggleDay(this)">Lu</div>
+                        <div class="day-pill" data-day="2" onclick="toggleDay(this)">Ma</div>
+                        <div class="day-pill" data-day="3" onclick="toggleDay(this)">Mi</div>
+                        <div class="day-pill" data-day="4" onclick="toggleDay(this)">Ju</div>
+                        <div class="day-pill" data-day="5" onclick="toggleDay(this)">Vi</div>
+                        <div class="day-pill" data-day="6" onclick="toggleDay(this)">Sá</div>
+                        <div class="day-pill" data-day="0" onclick="toggleDay(this)">Do</div>
+                    </div>
+                    <p class="text-[10px] text-slate-600 mt-2">Sin selección = solo una vez</p>
+                </div>
+                <!-- Sonido de alarma -->
+                <div>
+                    <label class="text-[10px] text-slate-400 uppercase font-bold block mb-3">Sonido de Alarma</label>
+                    <div id="alarmSoundList" class="space-y-1">
+                        <div class="alarm-sound-option selected" data-sound="digital" onclick="selectAlarmSound(this,'digital')">
+                            <button class="preview-btn" onclick="previewAlarmSound(event,'digital')"><i class="fa-solid fa-play text-[9px]"></i></button>
+                            <div style="flex:1">
+                                <p class="text-sm">Alarma Digital</p>
+                                <p class="text-[10px] text-slate-500">Clásica y efectiva</p>
+                            </div>
+                            <i class="fa-solid fa-check text-xs" style="color:var(--accent);"></i>
+                        </div>
+                        <div class="alarm-sound-option" data-sound="gentle" onclick="selectAlarmSound(this,'gentle')">
+                            <button class="preview-btn" onclick="previewAlarmSound(event,'gentle')"><i class="fa-solid fa-play text-[9px]"></i></button>
+                            <div style="flex:1">
+                                <p class="text-sm">Despertar Suave</p>
+                                <p class="text-[10px] text-slate-500">Crescendo gradual</p>
+                            </div>
+                        </div>
+                        <div class="alarm-sound-option" data-sound="bells" onclick="selectAlarmSound(this,'bells')">
+                            <button class="preview-btn" onclick="previewAlarmSound(event,'bells')"><i class="fa-solid fa-play text-[9px]"></i></button>
+                            <div style="flex:1">
+                                <p class="text-sm">Campanillas</p>
+                                <p class="text-[10px] text-slate-500">Tono suave y melodioso</p>
+                            </div>
+                        </div>
+                        <div class="alarm-sound-option" data-sound="nature" onclick="selectAlarmSound(this,'nature')">
+                            <button class="preview-btn" onclick="previewAlarmSound(event,'nature')"><i class="fa-solid fa-play text-[9px]"></i></button>
+                            <div style="flex:1">
+                                <p class="text-sm">Naturaleza</p>
+                                <p class="text-[10px] text-slate-500">Pájaros y brisa</p>
+                            </div>
+                        </div>
+                        <div class="alarm-sound-option" data-sound="tibetan" onclick="selectAlarmSound(this,'tibetan')">
+                            <button class="preview-btn" onclick="previewAlarmSound(event,'tibetan')"><i class="fa-solid fa-play text-[9px]"></i></button>
+                            <div style="flex:1">
+                                <p class="text-sm">Bol Tibetano</p>
+                                <p class="text-[10px] text-slate-500">Resonancia meditativa</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Custom sound upload -->
+                    <div class="mt-3">
+                        <label class="file-upload-label" for="customSoundInput">
+                            <i class="fa-solid fa-upload text-xs"></i>
+                            <span id="customSoundName">Subir mi propio sonido</span>
+                        </label>
+                        <input type="file" id="customSoundInput" accept="audio/*" onchange="loadCustomSound(event)">
+                    </div>
+                </div>
+                <!-- Fondo al dispararse -->
+                <div>
+                    <label class="text-[10px] text-slate-400 uppercase font-bold block mb-3">Fondo al Sonar</label>
+                    <select id="alarmBgSelect" style="color:white;background:#0f172a;border:1px solid #334155;border-radius:12px;padding:10px 14px;width:100%;outline:none;">
+                        <option value="auto">🌅 Automático según hora</option>
+                        <option value="midnight">🌑 Medianoche</option>
+                        <option value="dawn">🌄 Amanecer</option>
+                        <option value="morning">☀️ Mañana</option>
+                        <option value="afternoon">🌤️ Tarde</option>
+                        <option value="sunset">🌇 Atardecer</option>
+                        <option value="night">🌙 Noche</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="addAlarm()" class="w-full mt-8 py-4 rounded-2xl font-bold text-lg" style="background:var(--accent);">
+                <i class="fa-solid fa-bell mr-2"></i> Agregar Alarma
+            </button>
+        </div>
+    </div>
+
+</div><!-- end phone-frame -->
+
+<script>
+// ════════════════════════════════════════
+//  LOCALSTORAGE HELPERS
+// ════════════════════════════════════════
+const LS = {
+    get(key, def) {
+        try { const v = localStorage.getItem('sleepApp_' + key); return v !== null ? JSON.parse(v) : def; } catch(e) { return def; }
+    },
+    set(key, val) {
+        try { localStorage.setItem('sleepApp_' + key, JSON.stringify(val)); } catch(e) {}
+    }
+};
+
+// ════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════
+let currentTheme = LS.get('theme', 'medianoche');
+let sleepActive = false;
+let sleepStart = null;
+let sleepTimer = null;
+let alarmCounter = 0;
+let activeSound = null;
+let audioCtx = null;
+let soundNodes = {};
+let faceUpMode = false;
+let analogClockTimer = null;
+let alarmCheckInterval = null;
+let firingAlarmId = null;
+let alarmAudioNodes = [];
+let selectedAlarmSound = 'digital';
+let customSoundBuffer = null;
+let customSoundName = null;
+let previewNode = null;
+let selectedDays = [];
+let notifPermissionGranted = false;
+let snoozeTimeout = null;
+let wakeLock = null;
+let inactivityTimer = null;
+let lastActivityTime = Date.now();
+
+
+// Historial de sueño semanal: { 'YYYY-MM-DD': minutos }
+let sleepHistory = LS.get('sleepHistory', {});
+
+const phrases = [
+    '"El descanso es la base de la victoria"',
+    '"En el silencio de la noche, el alma se renueva"',
+    '"Dormir es el mejor meditación" — Dalai Lama',
+    '"Cada noche morimos un poco, para renacer al amanecer"',
+    '"El sueño es el interés que pagamos por el capital del bienestar"',
+];
+
+const motivationalPhrases = [
+    '"Cada amanecer es una segunda oportunidad"',
+    '"Hoy es un nuevo comienzo. Hazlo brillar."',
+    '"La vida es bella. Levántate y brilla."',
+    '"Un nuevo día, una nueva fortaleza, un nuevo pensamiento"',
+    '"El sol sale para todos. Hoy es tu día."',
+    '"Eres más fuerte de lo que crees"',
+    '"Cada mañana llegamos de nuevo a nacer"',
+    '"El mejor momento para empezar es ahora"',
+];
+
+const themeColors = {
+    medianoche: { glint: '#4b5563',  accent: '#3b82f6',  accent2: '#60a5fa' },
+    estrellas:  { glint: '#94a3b8',  accent: '#94a3b8',  accent2: '#cbd5e1' },
+    nebuloso:   { glint: '#818cf8',  accent: '#818cf8',  accent2: '#a5b4fc' },
+    lunallena:  { glint: '#8ba4c0',  accent: '#e2e8f0',  accent2: '#f1f5f9' },
+    galaxia:    { glint: '#c084fc',  accent: '#c084fc',  accent2: '#e879f9' },
+    atardecer:  { glint: '#fb923c',  accent: '#fb923c',  accent2: '#fbbf24' },
+};
+
+let alarms = LS.get('alarms', [
+    { id: 1, time: '06:30', label: 'Buenos días', enabled: true, days: [1,2,3,4,5], sound: 'digital', bg: 'auto' },
+    { id: 2, time: '08:00', label: 'Segunda alarma', enabled: false, days: [], sound: 'gentle', bg: 'auto' },
+]);
+
+// ════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+    // Restaurar tema guardado
+    if (currentTheme && currentTheme !== 'medianoche') {
+        const frame = document.getElementById('appFrame');
+        frame.className = frame.className.replace(/theme-\w+/g, '').trim();
+        frame.classList.add('phone-frame', `theme-${currentTheme}`);
+        const c = themeColors[currentTheme];
+        if (c) {
+            frame.style.setProperty('--glint', c.glint);
+            frame.style.setProperty('--accent', c.accent);
+            frame.style.setProperty('--accent2', c.accent2);
+        }
+        document.querySelectorAll('.theme-preview').forEach(el => el.classList.remove('selected'));
+        const tp = document.getElementById(`tp-${currentTheme}`);
+        if (tp) tp.classList.add('selected');
+    }
+
+    // Restaurar perfil
+    const savedName = LS.get('userName', '');
+    const savedAge = LS.get('userAge', '25');
+    if (savedName) {
+        document.getElementById('userName').value = savedName;
+        document.getElementById('displayUserName').textContent = savedName;
+    }
+    if (savedAge) document.getElementById('userAge').value = savedAge;
+
+    // Restaurar hora de sueño configurada
+    const savedWake = LS.get('wakeTime', '');
+    const savedBed = LS.get('bedTime', '');
+    if (savedWake) { document.getElementById('wakeTimeInput').value = savedWake; document.getElementById('savedSleepTime').textContent = savedWake; document.getElementById('activeSleepInfo').style.opacity = '1'; }
+    if (savedBed) document.getElementById('bedtimeInput').value = savedBed;
+
+    updateClock();
+    setInterval(updateClock, 1000);
+    buildClouds();
+    buildOrbs();
+    initVisualizer();
+    renderAlarms();
+    renderWeekBars();
+    requestNotifications();
+    startAlarmChecker();
+    initActivityTracking();
+    initPageVisibility();
+    requestWakeLock();
+    // Pre-solicitar micrófono al iniciar (para tenerlo listo)
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(s => {
+            s.getTracks().forEach(t => t.stop()); // solo verificar permiso
+        }).catch(() => {});
+    }
+
+    const d = new Date();
+    const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    document.getElementById('currentDateDisplay').textContent = `${days[d.getDay()]}, ${d.getDate()} de ${months[d.getMonth()]}`;
+
+    buildAlarmStars();
+
+    // Restaurar última estadística de sueño
+    const lastMin = LS.get('lastSleepMin', 0);
+    if (lastMin > 0) {
+        const h = Math.floor(lastMin/60), m = lastMin%60;
+        document.getElementById('statTime').textContent = `${h}h ${String(m).padStart(2,'0')}m`;
+        const pct = Math.min((lastMin/480)*100,100);
+        setTimeout(() => { document.getElementById('sleepProgress').style.width = pct+'%'; }, 500);
+    }
+});
+
+// ════════════════════════════════════════
+//  ALARM STARS BACKGROUND
+// ════════════════════════════════════════
+function buildAlarmStars() {
+    const container = document.getElementById('alarmStars');
+    for (let i = 0; i < 60; i++) {
+        const star = document.createElement('div');
+        const size = Math.random() * 2.5 + 0.5;
+        star.style.cssText = `
+            position:absolute;
+            width:${size}px; height:${size}px;
+            border-radius:50%;
+            background:white;
+            top:${Math.random()*65}%;
+            left:${Math.random()*100}%;
+            opacity:${Math.random()*0.7+0.1};
+            animation: starTwinkle ${2+Math.random()*3}s ease-in-out ${Math.random()*2}s infinite alternate;
+        `;
+        container.appendChild(star);
+    }
+}
+
+// Inject star twinkle keyframes
+const styleEl = document.createElement('style');
+styleEl.textContent = `@keyframes starTwinkle { from{opacity:0.1} to{opacity:0.8} }`;
+document.head.appendChild(styleEl);
+
+// ════════════════════════════════════════
+//  CLOCK
+// ════════════════════════════════════════
+function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('digitalTime').textContent = `${h}:${m}`;
+
+    if (document.getElementById('alarmFiringTime')) {
+        document.getElementById('alarmFiringTime').textContent = `${h}:${m}`;
+    }
+
+    if (sleepActive) {
+        document.getElementById('sleepBigTime').textContent = `${h}:${m}`;
+        document.getElementById('sleepSeconds').textContent = `:${s}`;
+        updateSleepDayLabel(now);
+        updateAnalogClock(now);
+    }
+}
+
+function updateSleepDayLabel(now) {
+    const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    document.getElementById('sleepDay').textContent = days[now.getDay()];
+}
+
+function updateAnalogClock(now) {
+    const h = now.getHours() % 12, m = now.getMinutes(), s = now.getSeconds();
+    const hDeg = h * 30 + m * 0.5;
+    const mDeg = m * 6;
+    const sDeg = s * 6;
+    document.getElementById('hourHand').style.transform = `rotate(${hDeg}deg)`;
+    document.getElementById('minuteHand').style.transform = `rotate(${mDeg}deg)`;
+    document.getElementById('secondHand').style.transform = `rotate(${sDeg}deg)`;
+}
+
+// ════════════════════════════════════════
+//  NOTIFICATIONS
+// ════════════════════════════════════════
+function requestNotifications() {
+    if ('Notification' in window) {
+        Notification.requestPermission().then(p => {
+            notifPermissionGranted = p === 'granted';
+        });
+    }
+}
+
+function requestNotifPermission(checkbox) {
+    if (checkbox.checked) {
+        requestNotifications();
+    }
+}
+
+function hideNotifToast() {
+    const toast = document.getElementById('notifToast');
+    toast.style.animation = 'notifFadeOut 0.3s ease forwards';
+    setTimeout(() => { toast.style.display = 'none'; toast.style.animation = ''; }, 300);
+}
+
+function showInAppNotification(text, icon='🌙', title='Sleep Deep') {
+    const toast = document.getElementById('notifToast');
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    document.getElementById('notifToastText').textContent = text;
+    document.getElementById('notifToastTitle').textContent = title;
+    document.getElementById('notifToastTime').textContent = `${hh}:${mm}`;
+    document.getElementById('notifToastIcon').textContent = icon;
+    toast.style.display = 'block';
+    toast.style.animation = 'notifSlide 0.45s cubic-bezier(0.175,0.885,0.32,1.275)';
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(() => { hideNotifToast(); }, 6000);
+}
+
+function sendSystemNotification(title, body) {
+    if (notifPermissionGranted && 'Notification' in window) {
+        try {
+            new Notification(title, { body, icon: '' });
+        } catch(e) {}
+    }
+}
+
+// ════════════════════════════════════════
+//  ALARM CHECKER (polling every second)
+// ════════════════════════════════════════
+function startAlarmChecker() {
+    alarmCheckInterval = setInterval(checkAlarms, 1000);
+}
+
+function checkAlarms() {
+    if (firingAlarmId !== null) return;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    const currentTime = `${hh}:${mm}`;
+    const currentDay = now.getDay();
+    const currentSec = now.getSeconds();
+
+    for (const alarm of alarms) {
+        if (!alarm.enabled) continue;
+        if (alarm.time !== currentTime) continue;
+        if (currentSec !== 0 && !alarm._justFired) continue;
+        // Check day
+        if (alarm.days.length > 0 && !alarm.days.includes(currentDay)) continue;
+        // Avoid double firing in same minute
+        if (alarm._lastFiredMinute === currentTime) continue;
+
+        alarm._lastFiredMinute = currentTime;
+        alarm._justFired = true;
+        setTimeout(() => { alarm._justFired = false; }, 59000);
+        fireAlarm(alarm);
+        break;
+    }
+}
+
+function fireAlarm(alarm) {
+    firingAlarmId = alarm.id;
+
+    // Determine background
+    const bgClass = getAlarmBgClass(alarm);
+
+    // Show overlay
+    const overlay = document.getElementById('alarmFiringOverlay');
+    const bgEl = document.getElementById('alarmFiringBg');
+    bgEl.className = 'alarm-firing-bg ' + bgClass;
+    overlay.classList.add('visible');
+
+    // Update firing time
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    document.getElementById('alarmFiringTime').textContent = `${h}:${m}`;
+    document.getElementById('alarmFiringLabel').textContent = alarm.label || 'Alarma';
+    document.getElementById('alarmMotivPhrase').textContent = motivationalPhrases[Math.floor(Math.random() * motivationalPhrases.length)];
+
+    // Play alarm sound
+    playAlarmSound(alarm.sound || 'digital');
+
+    // In-app notification
+    showInAppNotification(`¡${alarm.label || 'Alarma'}! Es hora de despertar`, '⏰', 'Alarma · Sleep Deep');
+
+    // System notification
+    sendSystemNotification('⏰ ¡Despierta! · Sleep Deep', alarm.label || 'Tu alarma ha sonado');
+}
+
+function getAlarmBgClass(alarm) {
+    const bgMode = alarm.bg || 'auto';
+    if (bgMode !== 'auto') {
+        const map = { midnight: 'alarm-bg-midnight', dawn: 'alarm-bg-dawn', morning: 'alarm-bg-morning', afternoon: 'alarm-bg-afternoon', sunset: 'alarm-bg-sunset', night: 'alarm-bg-night' };
+        return map[bgMode] || 'alarm-bg-midnight';
+    }
+    // Auto: based on alarm time
+    const [hStr] = alarm.time.split(':');
+    const hour = parseInt(hStr, 10);
+    if (hour >= 0 && hour < 5) return 'alarm-bg-midnight';
+    if (hour >= 5 && hour < 8) return 'alarm-bg-dawn';
+    if (hour >= 8 && hour < 12) return 'alarm-bg-morning';
+    if (hour >= 12 && hour < 17) return 'alarm-bg-afternoon';
+    if (hour >= 17 && hour < 20) return 'alarm-bg-sunset';
+    return 'alarm-bg-night';
+}
+
+function dismissAlarm() {
+    stopAlarmSound();
+    const overlay = document.getElementById('alarmFiringOverlay');
+    overlay.classList.remove('visible');
+    firingAlarmId = null;
+    if (snoozeTimeout) { clearTimeout(snoozeTimeout); snoozeTimeout = null; }
+}
+
+function snoozeAlarm() {
+    stopAlarmSound();
+    const overlay = document.getElementById('alarmFiringOverlay');
+    overlay.classList.remove('visible');
+    showInAppNotification('Pospuesto 5 minutos', '😴', 'Alarma pospuesta');
+    const fid = firingAlarmId;
+    firingAlarmId = null;
+    snoozeTimeout = setTimeout(() => {
+        const alarm = alarms.find(a => a.id === fid);
+        if (alarm) {
+            const snoozeAlarm = { ...alarm, label: `${alarm.label} (Pospuesta)` };
+            fireAlarm(snoozeAlarm);
+        }
+    }, 5 * 60 * 1000);
+}
+
+// ════════════════════════════════════════
+//  ALARM SOUNDS
+// ════════════════════════════════════════
+function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+}
+
+function playAlarmSound(soundId) {
+    stopAlarmSound();
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    const ctx = getAudioCtx();
+
+    let nodes = [];
+    if (soundId === 'custom' && customSoundBuffer) {
+        nodes = playCustomAlarmSound(ctx);
+    } else if (soundId === 'digital') {
+        nodes = createDigitalAlarm(ctx);
+    } else if (soundId === 'gentle') {
+        nodes = createGentleAlarm(ctx);
+    } else if (soundId === 'bells') {
+        nodes = createBellsAlarm(ctx);
+    } else if (soundId === 'nature') {
+        nodes = createNatureAlarm(ctx);
+    } else if (soundId === 'tibetan') {
+        nodes = createTibetanAlarm(ctx);
+    } else {
+        nodes = createDigitalAlarm(ctx);
+    }
+    alarmAudioNodes = nodes;
+}
+
+function stopAlarmSound() {
+    alarmAudioNodes.forEach(n => {
+        try { n.stop ? n.stop() : n.disconnect(); } catch(e) {}
+    });
+    alarmAudioNodes = [];
+}
+
+function createDigitalAlarm(ctx) {
+    const nodes = [];
+    let t = ctx.currentTime;
+    const masterGain = ctx.createGain();
+    masterGain.gain.value = 0.7;
+    masterGain.connect(ctx.destination);
+    nodes.push(masterGain);
+
+    function beepPattern() {
+        // Beep beep ... beep beep
+        const times = [0, 0.25, 0.6, 0.85];
+        times.forEach(dt => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.frequency.value = 880;
+            osc.type = 'square';
+            g.gain.setValueAtTime(0, t + dt);
+            g.gain.linearRampToValueAtTime(0.5, t + dt + 0.01);
+            g.gain.setValueAtTime(0.5, t + dt + 0.18);
+            g.gain.linearRampToValueAtTime(0, t + dt + 0.22);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(t + dt); osc.stop(t + dt + 0.25);
+            nodes.push(osc); nodes.push(g);
+        });
+        t += 1.4;
+    }
+
+    for (let i = 0; i < 60; i++) beepPattern();
+    return nodes;
+}
+
+function createGentleAlarm(ctx) {
+    const nodes = [];
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0, ctx.currentTime);
+    masterGain.gain.linearRampToValueAtTime(0.6, ctx.currentTime + 20);
+    masterGain.connect(ctx.destination);
+    nodes.push(masterGain);
+
+    let t = ctx.currentTime;
+    for (let cycle = 0; cycle < 40; cycle++) {
+        [523.25, 659.25, 783.99].forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.frequency.value = freq;
+            osc.type = 'sine';
+            const onset = t + i * 0.3;
+            g.gain.setValueAtTime(0, onset);
+            g.gain.linearRampToValueAtTime(0.3, onset + 0.1);
+            g.gain.exponentialRampToValueAtTime(0.001, onset + 0.8);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(onset); osc.stop(onset + 0.85);
+            nodes.push(osc); nodes.push(g);
+        });
+        t += 1.5;
+    }
+    return nodes;
+}
+
+function createBellsAlarm(ctx) {
+    const nodes = [];
+    const masterGain = ctx.createGain();
+    masterGain.gain.value = 0.5;
+    masterGain.connect(ctx.destination);
+    nodes.push(masterGain);
+
+    const bellFreqs = [1046.5, 1174.66, 1318.51, 1396.91];
+    let t = ctx.currentTime;
+    for (let rep = 0; rep < 50; rep++) {
+        bellFreqs.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.frequency.value = freq;
+            osc.type = 'sine';
+            const onset = t + i * 0.18;
+            g.gain.setValueAtTime(0.4, onset);
+            g.gain.exponentialRampToValueAtTime(0.001, onset + 1.2);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(onset); osc.stop(onset + 1.3);
+            nodes.push(osc); nodes.push(g);
+        });
+        t += 1.0;
+    }
+    return nodes;
+}
+
+function createNatureAlarm(ctx) {
+    const nodes = [];
+    // Bird chirps
+    const masterGain = ctx.createGain();
+    masterGain.gain.value = 0.4;
+    masterGain.connect(ctx.destination);
+    nodes.push(masterGain);
+
+    let t = ctx.currentTime;
+    for (let rep = 0; rep < 100; rep++) {
+        const chirpFreqs = [2000 + Math.random()*800, 2400 + Math.random()*600];
+        chirpFreqs.forEach(freq => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.frequency.setValueAtTime(freq, t);
+            osc.frequency.linearRampToValueAtTime(freq * 1.2, t + 0.08);
+            osc.frequency.linearRampToValueAtTime(freq, t + 0.15);
+            osc.type = 'sine';
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.3, t + 0.03);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(t); osc.stop(t + 0.22);
+            nodes.push(osc); nodes.push(g);
+        });
+        t += 0.25 + Math.random() * 0.4;
+    }
+
+    // Soft breeze underneath
+    const breezeNodes = createBreezeSound(ctx);
+    const breezeGain = ctx.createGain();
+    breezeGain.gain.value = 0.15;
+    breezeNodes.forEach(n => { try { n.disconnect(); n.connect && n.connect(breezeGain); } catch(e){} });
+    breezeGain.connect(masterGain);
+    nodes.push(...breezeNodes); nodes.push(breezeGain);
+
+    return nodes;
+}
+
+function createTibetanAlarm(ctx) {
+    const nodes = [];
+    const masterGain = ctx.createGain();
+    masterGain.gain.value = 0.5;
+    masterGain.connect(ctx.destination);
+    nodes.push(masterGain);
+
+    let t = ctx.currentTime;
+    const tibetanFreqs = [432, 528, 639];
+    for (let rep = 0; rep < 30; rep++) {
+        tibetanFreqs.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.frequency.value = freq;
+            osc.type = 'sine';
+            const onset = t + i * 0.3;
+            g.gain.setValueAtTime(0, onset);
+            g.gain.linearRampToValueAtTime(0.35, onset + 0.15);
+            g.gain.exponentialRampToValueAtTime(0.001, onset + 3.5);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(onset); osc.stop(onset + 3.6);
+            nodes.push(osc); nodes.push(g);
+        });
+        t += 3.0;
+    }
+    return nodes;
+}
+
+function playCustomAlarmSound(ctx) {
+    if (!customSoundBuffer) return [];
+    const src = ctx.createBufferSource();
+    src.buffer = customSoundBuffer;
+    src.loop = true;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.8;
+    src.connect(gain); gain.connect(ctx.destination);
+    src.start();
+    return [src, gain];
+}
+
+function previewAlarmSound(event, soundId) {
+    event.stopPropagation();
+    if (previewNode) {
+        try { previewNode.forEach(n => { try { n.stop ? n.stop() : n.disconnect(); } catch(e){} }); } catch(e) {}
+        previewNode = null;
+    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    const ctx = getAudioCtx();
+    let nodes;
+    if (soundId === 'digital') nodes = createDigitalAlarm(ctx);
+    else if (soundId === 'gentle') nodes = createGentleAlarm(ctx);
+    else if (soundId === 'bells') nodes = createBellsAlarm(ctx);
+    else if (soundId === 'nature') nodes = createNatureAlarm(ctx);
+    else if (soundId === 'tibetan') nodes = createTibetanAlarm(ctx);
+    previewNode = nodes;
+    setTimeout(() => {
+        if (previewNode === nodes) {
+            nodes.forEach(n => { try { n.stop ? n.stop() : n.disconnect(); } catch(e){} });
+            previewNode = null;
+        }
+    }, 3000);
+}
+
+function selectAlarmSound(el, soundId) {
+    selectedAlarmSound = soundId;
+    document.querySelectorAll('.alarm-sound-option').forEach(o => {
+        o.classList.remove('selected');
+        const check = o.querySelector('.fa-check');
+        if (check) check.remove();
+    });
+    el.classList.add('selected');
+    const check = document.createElement('i');
+    check.className = 'fa-solid fa-check text-xs';
+    check.style.color = 'var(--accent)';
+    el.appendChild(check);
+}
+
+function loadCustomSound(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    customSoundName = file.name;
+    document.getElementById('customSoundName').textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const ctx = getAudioCtx();
+        try {
+            customSoundBuffer = await ctx.decodeAudioData(e.target.result.slice(0));
+            // Auto-select custom sound
+            selectedAlarmSound = 'custom';
+            document.querySelectorAll('.alarm-sound-option').forEach(o => {
+                o.classList.remove('selected');
+                const ch = o.querySelector('.fa-check');
+                if (ch) ch.remove();
+            });
+        } catch(err) {
+            showToast('No se pudo cargar el archivo de audio');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// ════════════════════════════════════════
+//  DAY PILLS
+// ════════════════════════════════════════
+function toggleDay(el) {
+    el.classList.toggle('active');
+    const day = parseInt(el.dataset.day);
+    if (el.classList.contains('active')) {
+        if (!selectedDays.includes(day)) selectedDays.push(day);
+    } else {
+        selectedDays = selectedDays.filter(d => d !== day);
+    }
+}
+
+function resetDayPills() {
+    selectedDays = [];
+    document.querySelectorAll('.day-pill').forEach(p => p.classList.remove('active'));
+}
+
+// ════════════════════════════════════════
+//  THEME
+// ════════════════════════════════════════
+function setTheme(name) {
+    if (name === currentTheme) return;
+    const flash = document.getElementById('themeFlash');
+    flash.classList.add('active');
+    setTimeout(() => {
+        const frame = document.getElementById('appFrame');
+        frame.className = frame.className.replace(/theme-\w+/g, '').trim();
+        frame.classList.add('phone-frame', `theme-${name}`);
+        const c = themeColors[name];
+        frame.style.setProperty('--glint', c.glint);
+        frame.style.setProperty('--accent', c.accent);
+        frame.style.setProperty('--accent2', c.accent2);
+        document.getElementById('clockGlint').style.borderTopColor = c.glint;
+        document.getElementById('clockGlint').style.filter = `drop-shadow(0 0 10px ${c.glint})`;
+        document.querySelectorAll('.theme-preview').forEach(el => el.classList.remove('selected'));
+        const tp = document.getElementById(`tp-${name}`);
+        if (tp) tp.classList.add('selected');
+        currentTheme = name;
+        LS.set('theme', name);
+        refreshOrbColors();
+        flash.classList.remove('active');
+    }, 150);
+}
+
+// ════════════════════════════════════════
+//  NAV / VIEWS
+// ════════════════════════════════════════
+function switchView(name) {
+    document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById(`view-${name}`).classList.add('active');
+    document.getElementById(`nav-${name}`).classList.add('active');
+}
+
+// ════════════════════════════════════════
+//  CLOUDS & STARS
+// ════════════════════════════════════════
+function buildClouds() {
+    const box = document.getElementById('cloudBox');
+    const sizes = [[200,120],[280,140],[160,90],[240,100]];
+    const tops  = [10,25,8,35];
+    const durations = [28,38,22,45];
+    sizes.forEach(([w,h],i) => {
+        const c = document.createElement('div');
+        c.className = 'cloud';
+        c.style.cssText = `width:${w}px;height:${h}px;top:${tops[i]}%;animation-duration:${durations[i]}s;animation-delay:${-i*7}s;`;
+        box.appendChild(c);
+    });
+}
+
+// ════════════════════════════════════════
+//  ORBES FLOTANTES — más visibles en centro
+// ════════════════════════════════════════
+const orbThemeColors = {
+    medianoche: ['rgba(59,130,246,', 'rgba(99,102,241,', 'rgba(148,163,184,'],
+    estrellas:  ['rgba(148,163,184,', 'rgba(203,213,225,', 'rgba(226,232,240,'],
+    nebuloso:   ['rgba(129,140,248,', 'rgba(165,180,252,', 'rgba(99,102,241,'],
+    lunallena:  ['rgba(139,164,192,', 'rgba(203,213,225,', 'rgba(226,232,240,'],
+    galaxia:    ['rgba(192,132,252,', 'rgba(232,121,249,', 'rgba(139,92,246,'],
+    atardecer:  ['rgba(251,146,60,',  'rgba(251,191,36,',  'rgba(239,68,68,'],
+};
+
+function buildOrbs() {
+    const field = document.getElementById('orbField');
+    field.innerHTML = '';
+    const colors = orbThemeColors[currentTheme] || orbThemeColors.medianoche;
+
+    // Configuración de orbes con movimiento horizontal continuo
+    // Cada orbe nace por la izquierda (o centro-izq) y deriva hacia la derecha
+    const orbConfigs = [
+        // Grande centro-bajo, lento
+        { w:320, h:260, top: 35, startLeft: 5,  ci: 0, op: 0.22, dur: 28, delay:    0, anim: 'orbDriftSlow' },
+        // Mediano arriba-izq
+        { w:200, h:200, top:  8, startLeft: -5, ci: 1, op: 0.18, dur: 20, delay:   -6, anim: 'orbDrift' },
+        // Pequeño alto-centro
+        { w:150, h:150, top: 18, startLeft: 25, ci: 2, op: 0.20, dur: 16, delay:  -10, anim: 'orbDriftFast' },
+        // Grande izq-medio
+        { w:280, h:220, top: 55, startLeft: -8, ci: 0, op: 0.16, dur: 24, delay:   -4, anim: 'orbDriftSlow' },
+        // Mediano derecha
+        { w:180, h:180, top: 72, startLeft: 50, ci: 1, op: 0.19, dur: 18, delay:  -14, anim: 'orbDrift' },
+        // Pequeño arriba-derecha
+        { w:130, h:130, top: 10, startLeft: 55, ci: 2, op: 0.22, dur: 14, delay:   -8, anim: 'orbDriftFast' },
+        // Muy grande fondo
+        { w:380, h:300, top: 42, startLeft:-10, ci: 1, op: 0.12, dur: 32, delay:  -18, anim: 'orbDriftSlow' },
+        // Chico flotante centro
+        { w:120, h:120, top: 30, startLeft: 35, ci: 0, op: 0.25, dur: 13, delay:   -3, anim: 'orbDriftFast' },
+        // Mediano bajo-izq
+        { w:210, h:170, top: 80, startLeft:  0, ci: 2, op: 0.17, dur: 22, delay:  -11, anim: 'orbDrift' },
+        // Extra: chico muy rápido arriba
+        { w:100, h:100, top:  5, startLeft: 15, ci: 0, op: 0.20, dur: 11, delay:   -5, anim: 'orbDriftFast' },
+    ];
+
+    orbConfigs.forEach(c => {
+        const orb = document.createElement('div');
+        orb.className = 'orb';
+        orb.style.cssText = `
+            width:${c.w}px; height:${c.h}px;
+            top:${c.top}%; left:${c.startLeft}%;
+            background: radial-gradient(circle, ${colors[c.ci]}${c.op}) 0%, ${colors[c.ci]}0.06) 55%, ${colors[c.ci]}0) 80%);
+            animation: ${c.anim} ${c.dur}s ease-in-out ${c.delay}s infinite;
+        `;
+        field.appendChild(orb);
+    });
+}
+
+function refreshOrbColors() {
+    buildOrbs();
+}
+
+// ════════════════════════════════════════
+//  DEEP SLEEP
+// ════════════════════════════════════════
+function startDeepSleep() {
+    sleepActive = true;
+    sleepStart = Date.now();
+
+    // Inicializar datos de la noche
+    nightData = { sleepAt: sleepStart, deepSleepAt: null, wakeAt: null, snoreEvents: [], talkEvents: [], seismEvents: [] };
+    nightAudioClips = [];
+    setTimeout(() => { nightData.deepSleepAt = Date.now(); LS.set('nightData', nightData); }, 15 * 60 * 1000);
+    LS.set('nightData', nightData);
+
+    const overlay = document.getElementById('sleepOverlay');
+    overlay.style.display = 'flex';
+    setTimeout(() => overlay.classList.add('active'), 10);
+    document.getElementById('sleepPhrase').textContent = phrases[Math.floor(Math.random() * phrases.length)];
+    if (sleepTimer) clearInterval(sleepTimer);
+    sleepTimer = setInterval(updateSleepCounter, 1000);
+    requestWakeLock();
+    startNightRecording();
+
+    // Pantalla de suspensión primero — tap para ver la hora y despertar
+    document.getElementById('sleepFaceDown').style.display = 'flex';
+    document.getElementById('forestScene').style.display = 'none';
+    faceUpMode = false;
+
+    showInAppNotification('Monitoreo de sueño activo — buenas noches', '🌙', 'Sleep Deep');
+}
+
+function stopDeepSleep() {
+    sleepActive = false;
+    clearInterval(sleepTimer);
+    const overlay = document.getElementById('sleepOverlay');
+    overlay.classList.remove('active');
+    setTimeout(() => { overlay.style.display = 'none'; }, 800);
+
+    // Detener monitoreo de inactividad
+    stopInactivityTracking();
+    // Detener grabación de micrófono
+    stopNightRecording();
+
+    // Liberar wake lock
+    releaseWakeLock();
+
+    if (sleepStart) {
+        const elapsed = Date.now() - sleepStart;
+        const totalMin = Math.floor(elapsed / 60000);
+        const h = Math.floor(totalMin / 60);
+        const m = totalMin % 60;
+        document.getElementById('statTime').textContent = `${h}h ${String(m).padStart(2,'0')}m`;
+        const pct = Math.min((totalMin / 480) * 100, 100);
+        document.getElementById('sleepProgress').style.width = pct + '%';
+
+        // Guardar hora de despertar
+        if (nightData) {
+            nightData.wakeAt = Date.now();
+            LS.set('nightData', nightData);
+        }
+
+        // Guardar en historial semanal
+        if (totalMin > 5) {
+            const dateKey = todayKey(new Date(sleepStart));
+            sleepHistory[dateKey] = (sleepHistory[dateKey] || 0) + totalMin;
+            LS.set('sleepHistory', sleepHistory);
+            LS.set('lastSleepMin', totalMin);
+            renderWeekBars();
+        }
+    }
+    sleepStart = null;
+}
+
+function updateSleepCounter() {
+    const elapsed = Date.now() - sleepStart;
+    const h = Math.floor(elapsed / 3600000);
+    const m = Math.floor((elapsed % 3600000) / 60000);
+    const s = Math.floor((elapsed % 60000) / 1000);
+    const fmt = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    document.getElementById('sleepCounter').textContent = fmt;
+    document.getElementById('sleepElapsed').textContent = `${h}h ${m}m`;
+}
+
+function handleOrientation(e) {
+    if (!sleepActive) return;
+    const beta = e.beta;
+    if (beta !== null) {
+        const faceDown = Math.abs(beta) > 120;
+        if (faceDown && faceUpMode) { showFaceDown(); faceUpMode = false; }
+        else if (!faceDown && !faceUpMode) { showFaceUp(); faceUpMode = true; }
+    }
+}
+
+function showFaceDown() {
+    document.getElementById('sleepFaceDown').style.display = 'flex';
+    document.getElementById('forestScene').style.display = 'none';
+}
+
+function showFaceUp() {
+    document.getElementById('sleepFaceDown').style.display = 'none';
+    const fs = document.getElementById('forestScene');
+    fs.style.display = 'flex';
+    fs.style.opacity = '0';
+    fs.style.transition = 'opacity 0.8s ease';
+    setTimeout(() => { fs.style.opacity = '1'; }, 20);
+    updateClock();
+}
+
+document.getElementById('sleepOverlay').addEventListener('click', function(e) {
+    if (e.target.tagName === 'BUTTON') return;
+    // Tap en pantalla de suspensión → mostrar forestScene con hora
+    if (!faceUpMode) {
+        faceUpMode = true;
+        showFaceUp();
+    }
+});
+
+// ════════════════════════════════════════
+//  AMBIENT SOUNDS (Web Audio API)
+// ════════════════════════════════════════
+function createOceanSound(ctx) {
+    const bufLen = ctx.sampleRate * 4;
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1) * 0.3;
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 400;
+    const gain = ctx.createGain(); gain.gain.value = 0.4;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.12;
+    const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.3;
+    lfo.connect(lfoGain); lfoGain.connect(gain.gain);
+    src.connect(lp); lp.connect(gain); gain.connect(ctx.destination);
+    src.start(); lfo.start();
+    return [src, lfo, gain];
+}
+
+function createBreezeSound(ctx) {
+    const bufLen = ctx.sampleRate * 4;
+    const buf = ctx.createBuffer(2, bufLen, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1) * 0.12;
+    }
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const hp1 = ctx.createBiquadFilter(); hp1.type = 'highpass'; hp1.frequency.value = 800;
+    const hp2 = ctx.createBiquadFilter(); hp2.type = 'highpass'; hp2.frequency.value = 1600;
+    const gain = ctx.createGain(); gain.gain.value = 0.5;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.05;
+    const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.28;
+    lfo.connect(lfoGain); lfoGain.connect(gain.gain);
+    const delay = ctx.createDelay(0.3); delay.delayTime.value = 0.18;
+    const delayGain = ctx.createGain(); delayGain.gain.value = 0.25;
+    src.connect(hp1); hp1.connect(hp2); hp2.connect(gain);
+    gain.connect(ctx.destination);
+    gain.connect(delay); delay.connect(delayGain); delayGain.connect(ctx.destination);
+    src.start(); lfo.start();
+    return [src, lfo, gain, delay, delayGain];
+}
+
+function createRainSound(ctx) {
+    const bufLen = ctx.sampleRate * 2;
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2000; bp.Q.value = 0.5;
+    const gain = ctx.createGain(); gain.gain.value = 0.25;
+    src.connect(bp); bp.connect(gain); gain.connect(ctx.destination);
+    src.start();
+    return [src, gain];
+}
+
+function createRiverSound(ctx) {
+    const bufLen = ctx.sampleRate * 3;
+    const buf = ctx.createBuffer(2, bufLen, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        for (let i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1) * 0.4;
+    }
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 600;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3000;
+    const gain = ctx.createGain(); gain.gain.value = 0.3;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.18;
+    const lfoG = ctx.createGain(); lfoG.gain.value = 0.15;
+    lfo.connect(lfoG); lfoG.connect(gain.gain);
+    src.connect(hp); hp.connect(lp); lp.connect(gain); gain.connect(ctx.destination);
+    src.start(); lfo.start();
+    return [src, hp, lp, gain, lfo, lfoG];
+}
+
+function createCaveDropsSound(ctx) {
+    const nodes = [];
+    const masterG = ctx.createGain(); masterG.gain.value = 0.4; masterG.connect(ctx.destination);
+    nodes.push(masterG);
+    function scheduleDrop(t) {
+        const freq = 800 + Math.random() * 400;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.frequency.value = freq; osc.type = 'sine';
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.3, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+        osc.connect(g); g.connect(masterG);
+        osc.start(t); osc.stop(t + 0.85);
+        nodes.push(osc); nodes.push(g);
+    }
+    let t = ctx.currentTime;
+    for (let i = 0; i < 120; i++) {
+        scheduleDrop(t);
+        t += 0.5 + Math.random() * 2.5;
+    }
+    return nodes;
+}
+
+function createFireSound(ctx) {
+    const bufLen = ctx.sampleRate * 3;
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1);
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
+    const gain = ctx.createGain(); gain.gain.value = 0.2;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 3 + Math.random();
+    const lfoG = ctx.createGain(); lfoG.gain.value = 0.08;
+    lfo.connect(lfoG); lfoG.connect(gain.gain);
+    src.connect(lp); lp.connect(gain); gain.connect(ctx.destination);
+    src.start(); lfo.start();
+    // Crackle layer
+    const buf2 = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d2 = buf2.getChannelData(0);
+    for (let i = 0; i < d2.length; i++) d2[i] = Math.random() < 0.003 ? (Math.random()*2-1) : 0;
+    const crackle = ctx.createBufferSource(); crackle.buffer = buf2; crackle.loop = true;
+    const crackleG = ctx.createGain(); crackleG.gain.value = 0.15;
+    crackle.connect(crackleG); crackleG.connect(ctx.destination);
+    crackle.start();
+    return [src, lfo, gain, crackle, crackleG];
+}
+
+function createBirdsSound(ctx) {
+    const nodes = [];
+    const masterG = ctx.createGain(); masterG.gain.value = 0.35; masterG.connect(ctx.destination);
+    nodes.push(masterG);
+    function bird(t) {
+        const baseFreq = 1200 + Math.random() * 1600;
+        const notes = [baseFreq, baseFreq * 1.25, baseFreq * 1.5, baseFreq * 1.25];
+        notes.forEach((f, i) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.frequency.value = f; osc.type = 'sine';
+            const onset = t + i * 0.08;
+            g.gain.setValueAtTime(0, onset);
+            g.gain.linearRampToValueAtTime(0.25, onset + 0.03);
+            g.gain.exponentialRampToValueAtTime(0.001, onset + 0.14);
+            osc.connect(g); g.connect(masterG);
+            osc.start(onset); osc.stop(onset + 0.15);
+            nodes.push(osc); nodes.push(g);
+        });
+    }
+    let t = ctx.currentTime;
+    for (let i = 0; i < 100; i++) {
+        bird(t);
+        t += 0.4 + Math.random() * 1.2;
+    }
+    return nodes;
+}
+
+function create432HzSound(ctx) {
+    const nodes = [];
+    const masterG = ctx.createGain(); masterG.gain.value = 0.3; masterG.connect(ctx.destination);
+    nodes.push(masterG);
+    [432, 432*2, 432*3].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.frequency.value = freq; osc.type = 'sine';
+        g.gain.value = 0.3 / (i + 1);
+        osc.connect(g); g.connect(masterG);
+        osc.start();
+        nodes.push(osc); nodes.push(g);
+    });
+    return nodes;
+}
+
+function createTibetanBowlSound(ctx) {
+    const nodes = [];
+    const masterG = ctx.createGain(); masterG.gain.value = 0.4; masterG.connect(ctx.destination);
+    nodes.push(masterG);
+    function strike(t) {
+        [220, 330, 440, 528].forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.frequency.value = freq; osc.type = 'sine';
+            g.gain.setValueAtTime(0.4 / (i+1), t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 4);
+            osc.connect(g); g.connect(masterG);
+            osc.start(t); osc.stop(t + 4.2);
+            nodes.push(osc); nodes.push(g);
+        });
+    }
+    let t = ctx.currentTime;
+    for (let i = 0; i < 15; i++) { strike(t); t += 4.5; }
+    return nodes;
+}
+
+function createThunderSound(ctx) {
+    const nodes = [];
+    const masterG = ctx.createGain(); masterG.gain.value = 0.5; masterG.connect(ctx.destination);
+    nodes.push(masterG);
+    // Rain base
+    const rainNodes = createRainSound(ctx);
+    rainNodes.forEach(n => {
+        try { n.disconnect(); } catch(e) {}
+        try { n.connect && n.connect(masterG); } catch(e) {}
+    });
+    nodes.push(...rainNodes);
+    // Thunder rumbles
+    function thunder(t) {
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.exp(-i / (ctx.sampleRate * 0.5));
+        const src = ctx.createBufferSource(); src.buffer = buf;
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 150;
+        const g = ctx.createGain(); g.gain.value = 0.5;
+        src.connect(lp); lp.connect(g); g.connect(masterG);
+        src.start(t);
+        nodes.push(src); nodes.push(lp); nodes.push(g);
+    }
+    let t = ctx.currentTime + 2;
+    for (let i = 0; i < 8; i++) { thunder(t); t += 5 + Math.random() * 8; }
+    return nodes;
+}
+
+function toggleSound(id) {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    const item = document.getElementById(`snd-${id}`);
+    const icon = document.getElementById(`snd-${id}-icon`);
+
+    if (activeSound === id) {
+        soundNodes[id]?.forEach(n => { try { n.stop ? n.stop() : n.disconnect(); } catch(e){} });
+        delete soundNodes[id];
+        activeSound = null;
+        item.classList.remove('playing');
+        icon.className = 'fa-solid fa-play text-[10px] opacity-40';
+        icon.style.color = '';
+    } else {
+        if (activeSound) {
+            soundNodes[activeSound]?.forEach(n => { try { n.stop ? n.stop() : n.disconnect(); } catch(e){} });
+            delete soundNodes[activeSound];
+            document.getElementById(`snd-${activeSound}`)?.classList.remove('playing');
+            const prevIcon = document.getElementById(`snd-${activeSound}-icon`);
+            if (prevIcon) { prevIcon.className = 'fa-solid fa-play text-[10px] opacity-40'; prevIcon.style.color = ''; }
+        }
+        let nodes;
+        if (id === 'relajantes') nodes = createOceanSound(ctx);
+        else if (id === 'mananeros') nodes = createBreezeSound(ctx);
+        else if (id === 'tranquilos') nodes = createRainSound(ctx);
+        else if (id === 'rio') nodes = createRiverSound(ctx);
+        else if (id === 'cueva') nodes = createCaveDropsSound(ctx);
+        else if (id === 'fogata') nodes = createFireSound(ctx);
+        else if (id === 'pajaros') nodes = createBirdsSound(ctx);
+        else if (id === 'frecuencia') nodes = create432HzSound(ctx);
+        else if (id === 'bol') nodes = createTibetanBowlSound(ctx);
+        else if (id === 'tormenta') nodes = createThunderSound(ctx);
+        else nodes = createOceanSound(ctx);
+
+        soundNodes[id] = nodes;
+        activeSound = id;
+        item.classList.add('playing');
+        icon.className = 'fa-solid fa-pause text-[10px]';
+        icon.style.color = 'var(--accent2)';
+    }
+}
+
+// ════════════════════════════════════════
+//  VISUALIZER
+// ════════════════════════════════════════
+function initVisualizer() {
+    const canvas = document.getElementById('micVisualizer');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.offsetWidth * 2;
+    canvas.height = 160;
+    let phase = 0;
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = getComputedStyle(document.getElementById('appFrame')).getPropertyValue('--accent') || '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const bars = 40;
+        const bw = canvas.width / bars;
+        for (let i = 0; i < bars; i++) {
+            const amp = (Math.sin(i * 0.4 + phase) * 0.5 + 0.5) * (Math.random() * 0.3 + 0.7);
+            const h = amp * canvas.height * 0.7;
+            const x = i * bw + bw / 2;
+            ctx.moveTo(x, canvas.height / 2 - h / 2);
+            ctx.lineTo(x, canvas.height / 2 + h / 2);
+        }
+        ctx.stroke();
+        phase += 0.06;
+        requestAnimationFrame(draw);
+    }
+    draw();
+}
+
+// ════════════════════════════════════════
+//  MODALS
+// ════════════════════════════════════════
+function openSleepModal()     { openModal('modalSleep'); }
+function openHistoryModal() {
+    // Cargar y renderizar datos reales de la noche
+    renderNightHistory();
+    openModal('modalHistory');
+}
+
+// ════════════════════════════════════════
+//  SISTEMA DE DATOS REALES DE LA NOCHE
+// ════════════════════════════════════════
+
+// Estructura de datos de una sesión de sueño
+// nightData = { sleepAt, wakeAt, snoreEvents:[{start,end}], talkEvents:[{at}], seismEvents:[{at,intensity}], audioClips:[{id,blob,at,label,saved}] }
+let nightData = LS.get('nightData', null);
+let nightAudioClips = []; // blobs en memoria (no se persisten, se borran al cerrar)
+let micRecorder = null;
+let micStream = null;
+let isRecordingNight = false;
+let audioChunks = [];
+let soundDetectionInterval = null;
+
+function renderNightHistory() {
+    const timeline = document.getElementById('nightTimeline');
+    const audioSection = document.getElementById('audioSection');
+    const noDataMsg = document.getElementById('noSleepDataMsg');
+    const dateLabel = document.getElementById('historyDateLabel');
+
+    if (!nightData) {
+        timeline.innerHTML = '';
+        audioSection.style.display = 'none';
+        noDataMsg.style.display = 'block';
+        dateLabel.textContent = '';
+        return;
+    }
+
+    noDataMsg.style.display = 'none';
+
+    // Fecha
+    if (nightData.sleepAt) {
+        const d = new Date(nightData.sleepAt);
+        const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+        const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+        dateLabel.textContent = `${days[d.getDay()]} ${d.getDate()} de ${months[d.getMonth()]}`;
+    }
+
+    // Construir timeline
+    const events = [];
+
+    if (nightData.sleepAt) {
+        events.push({ icon:'🛌', color:'var(--accent2)', label:'Te dormiste', time: fmtTime(nightData.sleepAt), border: true });
+    }
+    if (nightData.deepSleepAt) {
+        events.push({ icon:'💤', color:'#818cf8', label:'Sueño profundo', time: fmtTime(nightData.deepSleepAt), border: true });
+    }
+    if (nightData.snoreEvents && nightData.snoreEvents.length > 0) {
+        nightData.snoreEvents.forEach(ev => {
+            const end = ev.end ? ` – ${fmtTime(ev.end)}` : '';
+            events.push({ icon:'😮‍💨', color:'#fbbf24', label:'Ronquido detectado', time: fmtTime(ev.start) + end, border: true });
+        });
+    }
+    if (nightData.talkEvents && nightData.talkEvents.length > 0) {
+        nightData.talkEvents.forEach(ev => {
+            events.push({ icon:'💬', color:'#c084fc', label:'Hablaste dormido', time: fmtTime(ev.at), border: true });
+        });
+    }
+    if (nightData.seismEvents && nightData.seismEvents.length > 0) {
+        nightData.seismEvents.forEach(ev => {
+            events.push({ icon:'🌍', color:'#f97316', label:`Movimiento detectado (${ev.intensity || 'leve'})`, time: fmtTime(ev.at), border: true });
+        });
+    }
+    if (nightData.wakeAt) {
+        events.push({ icon:'☀️', color:'#fb923c', label:'Te despertaste', time: fmtTime(nightData.wakeAt), border: false });
+    }
+
+    if (events.length === 0) {
+        timeline.innerHTML = `<p style="color:rgba(255,255,255,0.3);font-size:13px;text-align:center;padding:16px 0;">No hay eventos registrados aún</p>`;
+    } else {
+        timeline.innerHTML = events.map((ev, i) => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;${ev.border?'border-bottom:1px solid rgba(255,255,255,0.05)':''};">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div style="width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">${ev.icon}</div>
+                    <span style="font-size:14px;color:rgba(255,255,255,0.85);">${ev.label}</span>
+                </div>
+                <span style="font-size:12px;color:rgba(255,255,255,0.35);font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:12px;">${ev.time}</span>
+            </div>
+        `).join('');
+    }
+
+    // Audio clips
+    if (nightAudioClips.length > 0) {
+        audioSection.style.display = 'block';
+        renderAudioClips();
+    } else {
+        audioSection.style.display = 'none';
+    }
+}
+
+function fmtTime(ts) {
+    if (!ts) return '--:--';
+    const d = new Date(ts);
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function renderAudioClips() {
+    const list = document.getElementById('audioRecordingsList');
+    if (!list) return;
+    list.innerHTML = '';
+    nightAudioClips.forEach((clip, i) => {
+        const url = URL.createObjectURL(clip.blob);
+        const div = document.createElement('div');
+        div.id = `audioclip-${i}`;
+        div.style.cssText = `
+            background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+            border-radius:18px;padding:14px 16px;margin-bottom:10px;
+        `;
+        div.innerHTML = `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <div style="font-size:20px;">${clip.label}</div>
+                <div style="flex:1;">
+                    <p style="font-size:12px;font-weight:600;margin:0;">${clip.name}</p>
+                    <p style="font-size:10px;color:rgba(255,255,255,0.35);margin:2px 0 0;">${fmtTime(clip.at)}</p>
+                </div>
+            </div>
+            <audio src="${url}" controls style="width:100%;height:32px;border-radius:8px;outline:none;" preload="auto"></audio>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+                <button onclick="saveAudioClip(${i})" style="flex:1;padding:9px;border-radius:12px;font-size:12px;font-weight:600;background:var(--accent);border:none;color:white;cursor:pointer;transition:0.2s;" ${clip.saved?'disabled style="opacity:0.5;pointer-events:none;"':''}>
+                    ${clip.saved ? '✓ Guardado' : '💾 Guardar'}
+                </button>
+                <button onclick="deleteAudioClip(${i})" style="padding:9px 14px;border-radius:12px;font-size:12px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.2);color:#fca5a5;cursor:pointer;transition:0.2s;">
+                    🗑
+                </button>
+            </div>
+        `;
+        list.appendChild(div);
+    });
+}
+
+function saveAudioClip(idx) {
+    const clip = nightAudioClips[idx];
+    if (!clip) return;
+    clip.saved = true;
+    // Descargar el audio
+    const url = URL.createObjectURL(clip.blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sleepdeep-${clip.name.replace(/\s+/g,'-')}.webm`;
+    a.click();
+    URL.revokeObjectURL(url);
+    renderAudioClips();
+    showInAppNotification(`Audio "${clip.name}" guardado`, '💾', 'Audio guardado');
+}
+
+function deleteAudioClip(idx) {
+    nightAudioClips.splice(idx, 1);
+    renderAudioClips();
+    if (nightAudioClips.length === 0) {
+        document.getElementById('audioSection').style.display = 'none';
+    }
+}
+
+// ────────────────────────────────────────
+//  GRABACIÓN NOCTURNA CON MICRÓFONO
+// ────────────────────────────────────────
+async function startNightRecording() {
+    if (isRecordingNight) return;
+    try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        isRecordingNight = true;
+        monitorSoundEvents();
+    } catch(e) {
+        // Sin permiso de micrófono, continuar sin grabación
+        console.warn('Micrófono no disponible:', e);
+    }
+}
+
+function stopNightRecording() {
+    isRecordingNight = false;
+    if (soundDetectionInterval) { clearInterval(soundDetectionInterval); soundDetectionInterval = null; }
+    if (micRecorder && micRecorder.state !== 'inactive') {
+        try { micRecorder.stop(); } catch(e) {}
+    }
+    if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+    }
+}
+
+function monitorSoundEvents() {
+    if (!micStream) return;
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = ctx.createMediaStreamSource(micStream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+
+    const dataArr = new Uint8Array(analyser.frequencyBinCount);
+    let snoreStart = null;
+    let lastLoudTime = 0;
+    let quietStreak = 0;
+
+    soundDetectionInterval = setInterval(() => {
+        if (!isRecordingNight || !sleepActive) { clearInterval(soundDetectionInterval); return; }
+        analyser.getByteTimeDomainData(dataArr);
+        let sum = 0;
+        for (let i = 0; i < dataArr.length; i++) { const v = (dataArr[i] - 128) / 128; sum += v*v; }
+        const rms = Math.sqrt(sum / dataArr.length);
+        const now = Date.now();
+
+        if (rms > 0.18) { // sonido significativo
+            lastLoudTime = now;
+            quietStreak = 0;
+            if (!snoreStart) snoreStart = now;
+        } else {
+            quietStreak++;
+            if (snoreStart && quietStreak > 6) { // ~3s de silencio = fin de evento
+                const duration = (now - snoreStart) / 1000;
+                if (duration > 4) { // mín 4s para contar como ronquido/habla
+                    captureAudioClip(snoreStart, now, rms, duration);
+                    if (!nightData) nightData = {};
+                    if (duration > 8) {
+                        if (!nightData.snoreEvents) nightData.snoreEvents = [];
+                        nightData.snoreEvents.push({ start: snoreStart, end: now });
+                    } else {
+                        if (!nightData.talkEvents) nightData.talkEvents = [];
+                        nightData.talkEvents.push({ at: snoreStart });
+                    }
+                    LS.set('nightData', nightData);
+                }
+                snoreStart = null;
+            }
+        }
+    }, 500);
+}
+
+function captureAudioClip(startTs, endTs, loudness, duration) {
+    if (!micStream) return;
+    const recorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
+    const chunks = [];
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const isSnore = duration > 8;
+        nightAudioClips.push({
+            blob,
+            at: startTs,
+            name: isSnore ? `Ronquidos ${fmtTime(startTs)}` : `Sonido ${fmtTime(startTs)}`,
+            label: isSnore ? '😮‍💨' : '💬',
+            saved: false
+        });
+    };
+    recorder.start();
+    setTimeout(() => { try { recorder.stop(); } catch(e) {} }, Math.min(duration * 1000, 30000));
+}
+function openPersonalizacion(){ openModal('modalPersonalizacion'); }
+function openPermisos()       { openModal('modalPermisos'); }
+
+function openModal(id) {
+    const el = document.getElementById(id);
+    el.style.display = 'flex';
+    el.classList.add('flex');
+}
+function closeModal(id) {
+    const el = document.getElementById(id);
+    el.style.display = 'none';
+    el.classList.remove('flex');
+}
+
+function saveSleepTime() {
+    const wake = document.getElementById('wakeTimeInput').value;
+    const bed = document.getElementById('bedtimeInput').value;
+    document.getElementById('savedSleepTime').textContent = wake;
+    document.getElementById('activeSleepInfo').style.opacity = '1';
+    LS.set('wakeTime', wake);
+    LS.set('bedTime', bed);
+    closeModal('modalSleep');
+}
+
+function saveProfile() {
+    const name = document.getElementById('userName').value;
+    const age = document.getElementById('userAge').value;
+    document.getElementById('displayUserName').textContent = name || 'Usuario';
+    LS.set('userName', name);
+    LS.set('userAge', age);
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = '✓ Guardado';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+}
+
+// ════════════════════════════════════════
+//  ALARMS
+// ════════════════════════════════════════
+function openAlarmas() {
+    renderAlarms();
+    const panel = document.getElementById('alarmPanel');
+    panel.style.display = 'flex';
+    requestAnimationFrame(() => panel.classList.add('open'));
+}
+
+function closeAlarmas() {
+    const panel = document.getElementById('alarmPanel');
+    panel.classList.remove('open');
+    panel.style.opacity = '0';
+    panel.style.transform = 'translateX(30px)';
+    setTimeout(() => {
+        panel.style.display = 'none';
+        panel.style.opacity = '';
+        panel.style.transform = '';
+    }, 400);
+}
+
+function renderAlarms() {
+    const list = document.getElementById('alarmList');
+    if (!list) return;
+    list.innerHTML = '';
+    alarms.forEach((a, idx) => {
+        const dayNames = ['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
+        const daysStr = a.days && a.days.length > 0
+            ? a.days.sort().map(d => dayNames[d]).join(', ')
+            : 'Una vez';
+        const div = document.createElement('div');
+        div.className = 'stat-card alarm-item !py-4 !px-5';
+        div.id = `alarm-${a.id}`;
+        div.style.animationDelay = `${idx * 60}ms`;
+        div.innerHTML = `
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="text-2xl font-light" style="font-family:'Playfair Display',serif;">${a.time}</p>
+                    <p class="text-xs text-slate-500">${a.label}</p>
+                    <p class="text-[10px] text-slate-600 mt-1">${daysStr}</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <label class="toggle-wrap">
+                        <input type="checkbox" ${a.enabled?'checked':''} onchange="toggleAlarm(${a.id}, this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <button onclick="deleteAlarm(${a.id})" class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center transition-colors hover:bg-red-500/20">
+                        <i class="fa-solid fa-xmark text-xs text-slate-500"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        list.appendChild(div);
+    });
+}
+
+function toggleAlarm(id, enabled) {
+    const a = alarms.find(x => x.id === id);
+    if (a) { a.enabled = enabled; LS.set('alarms', alarms); }
+}
+
+function deleteAlarm(id) {
+    const el = document.getElementById(`alarm-${id}`);
+    if (el) {
+        el.classList.add('removing');
+        setTimeout(() => {
+            alarms = alarms.filter(a => a.id !== id);
+            LS.set('alarms', alarms);
+            renderAlarms();
+        }, 300);
+    } else {
+        alarms = alarms.filter(a => a.id !== id);
+        LS.set('alarms', alarms);
+        renderAlarms();
+    }
+}
+
+function openAddAlarm() {
+    resetDayPills();
+    selectedAlarmSound = 'digital';
+    document.querySelectorAll('.alarm-sound-option').forEach(o => {
+        o.classList.remove('selected');
+        const ch = o.querySelector('.fa-check');
+        if (ch) ch.remove();
+    });
+    const first = document.querySelector('.alarm-sound-option[data-sound="digital"]');
+    if (first) {
+        first.classList.add('selected');
+        const check = document.createElement('i');
+        check.className = 'fa-solid fa-check text-xs';
+        check.style.color = 'var(--accent)';
+        first.appendChild(check);
+    }
+    document.getElementById('alarmBgSelect').value = 'auto';
+    openModal('modalAddAlarm');
+}
+
+function addAlarm() {
+    const time = document.getElementById('newAlarmTime').value;
+    const label = document.getElementById('newAlarmLabel').value || 'Alarma';
+    const bgVal = document.getElementById('alarmBgSelect').value;
+    const newId = Date.now();
+    alarms.push({
+        id: newId,
+        time,
+        label,
+        enabled: true,
+        days: [...selectedDays],
+        sound: selectedAlarmSound,
+        bg: bgVal,
+    });
+    alarms.sort((a,b) => a.time.localeCompare(b.time));
+    LS.set('alarms', alarms);
+    closeModal('modalAddAlarm');
+    document.getElementById('newAlarmLabel').value = '';
+    renderAlarms();
+    showInAppNotification(`Alarma "${label}" configurada para las ${time}`, '🔔', 'Alarma guardada');
+    setTimeout(() => {
+        const el = document.getElementById(`alarm-${newId}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+}
+
+// ════════════════════════════════════════
+//  PERMISSIONS
+// ════════════════════════════════════════
+function requestMicPermission(checkbox) {
+    if (checkbox.checked) {
+        navigator.mediaDevices?.getUserMedia({ audio: true })
+            .then(stream => {
+                stream.getTracks().forEach(t => t.enabled = false);
+                checkbox.checked = true;
+            })
+            .catch(() => {
+                checkbox.checked = false;
+                showPermissionDenied('Micrófono');
+            });
+    }
+}
+
+function requestClockPermission(checkbox) {
+    if (checkbox.checked) { checkbox.checked = true; }
+}
+
+function requestGyroPermission(checkbox) {
+    if (checkbox.checked) {
+        if (typeof DeviceOrientationEvent !== 'undefined' &&
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(r => { checkbox.checked = r === 'granted'; })
+                .catch(() => { checkbox.checked = false; showPermissionDenied('Giroscopio'); });
+        }
+        window.addEventListener('deviceorientation', () => {}, { once: true });
+    }
+}
+
+function showPermissionDenied(name) {
+    const msg = document.createElement('div');
+    msg.style.cssText = `position:fixed;bottom:100px;left:50%;transform:translateX(-50%);
+        background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);
+        color:#fca5a5;padding:12px 20px;border-radius:16px;font-size:13px;
+        z-index:9999;backdrop-filter:blur(10px);white-space:nowrap;
+        animation:slideUp 0.3s ease;`;
+    msg.textContent = `${name}: permiso denegado`;
+    document.body.appendChild(msg);
+    setTimeout(() => msg.remove(), 3000);
+}
+
+
+// ════════════════════════════════════════
+//  HISTORIAL SEMANAL — BARRA DE DÍAS
+// ════════════════════════════════════════
+function todayKey(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function renderWeekBars() {
+    const container = document.getElementById('weekBars');
+    if (!container) return;
+
+    // Lunes=0 ... Domingo=6 en nuestro array
+    const today = new Date();
+    const todayDow = today.getDay(); // 0=Dom ... 6=Sab
+    // Calcular el lunes de esta semana
+    const diffToMonday = (todayDow === 0 ? -6 : 1 - todayDow);
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diffToMonday);
+    monday.setHours(0,0,0,0);
+
+    const dayLabels = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
+    const dayData = []; // minutos dormidos cada día
+    let totalMin = 0, daysWithData = 0;
+
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const key = todayKey(d);
+        const min = sleepHistory[key] || 0;
+        dayData.push(min);
+        if (min > 0) { totalMin += min; daysWithData++; }
+    }
+
+    const maxMin = Math.max(...dayData, 60); // mínimo 1h para escala
+    const idealMin = 480; // 8 horas = ideal
+    const avgMin = daysWithData > 0 ? Math.round(totalMin / daysWithData) : 0;
+
+    // Actualizar label de promedio
+    const avgEl = document.getElementById('weekAvgLabel');
+    if (avgEl) {
+        const ah = Math.floor(avgMin/60), am = avgMin%60;
+        avgEl.textContent = `Promedio: ${ah}h ${am > 0 ? am+'m' : ''}`;
+    }
+
+    container.innerHTML = '';
+    const maxBarH = 100; // px máximo
+
+    dayData.forEach((min, i) => {
+        const isToday = (i === ((todayDow === 0 ? 6 : todayDow - 1)));
+        const barH = min > 0 ? Math.max(8, Math.round((min / Math.max(maxMin, idealMin)) * maxBarH)) : 4;
+        const pct = min / idealMin;
+        const color = min === 0
+            ? 'rgba(255,255,255,0.06)'
+            : pct >= 0.875
+                ? 'var(--accent)'
+                : pct >= 0.625
+                    ? 'rgba(251,191,36,0.7)'
+                    : 'rgba(239,68,68,0.6)';
+
+        const h = Math.floor(min/60), m = min%60;
+        const label = min > 0 ? `${h}h${m>0?m+'m':''}` : '';
+
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = `flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;`;
+
+        const timeLabel = document.createElement('span');
+        timeLabel.textContent = label;
+        timeLabel.style.cssText = `font-size:8px; color:${min>0?'rgba(255,255,255,0.5)':'transparent'}; height:10px; line-height:1;`;
+
+        const bar = document.createElement('div');
+        bar.style.cssText = `
+            width:100%; border-radius:6px 6px 3px 3px;
+            height:${barH}px;
+            background:${color};
+            transition: height 0.8s cubic-bezier(0.34,1.56,0.64,1), background 0.5s;
+            position:relative;
+            ${isToday ? `box-shadow:0 0 10px ${color};` : ''}
+        `;
+        // Animar entrada
+        bar.style.height = '0px';
+        setTimeout(() => { bar.style.height = barH + 'px'; }, 50 + i * 80);
+
+        if (isToday) {
+            bar.style.outline = '1px solid rgba(255,255,255,0.3)';
+        }
+
+        wrapper.appendChild(timeLabel);
+        wrapper.appendChild(bar);
+        container.appendChild(wrapper);
+    });
+}
+
+// ════════════════════════════════════════
+//  WAKE LOCK (pantalla activa mientras duerme)
+// ════════════════════════════════════════
+async function requestWakeLock() {
+    if (!sleepActive) return;
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => { wakeLock = null; });
+        }
+    } catch(e) {}
+}
+
+async function releaseWakeLock() {
+    try { if (wakeLock) { await wakeLock.release(); wakeLock = null; } } catch(e) {}
+}
+
+// ════════════════════════════════════════
+//  PAGE VISIBILITY — segundo plano
+// ════════════════════════════════════════
+function initPageVisibility() {
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            if (sleepActive) {
+                LS.set('sleepBgStart', sleepStart);
+            }
+        } else {
+            if (sleepActive) {
+                const savedStart = LS.get('sleepBgStart', null);
+                if (savedStart) sleepStart = savedStart;
+                requestWakeLock();
+            }
+        }
+    });
+}
+
+function initActivityTracking() {
+    // Sin auto-inicio de sueño por inactividad — el usuario lo inicia manualmente
+}
+
+function stopInactivityTracking() {
+    if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; }
+}
+
+// ════════════════════════════════════════
+//  SERVICE WORKER — PWA
+// ════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+            .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
+            .catch(err => console.warn('[PWA] Error al registrar SW:', err));
+    });
+}
+
+// ─── Prompt de instalación (Android / Chrome) ───
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    // Mostrar botón de instalación si existe en el HTML
+    const btn = document.getElementById('installPwaBtn');
+    if (btn) btn.style.display = 'block';
+});
+window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    const btn = document.getElementById('installPwaBtn');
+    if (btn) btn.style.display = 'none';
+    showInAppNotification('App instalada correctamente', '📲', 'Instalada');
+});
+
+</script>
+</body>
+</html>
