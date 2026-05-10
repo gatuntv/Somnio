@@ -3,7 +3,7 @@
   "short_name": "Somnio",
   "description": "Monitorea y mejora tu sueño cada noche",
   "start_url": "./index.html",
-  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"]
   "orientation": "portrait",
   "background_color": "#000000",
   "theme_color": "#000000",
