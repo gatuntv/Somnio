@@ -1,6 +1,6 @@
 {
-  "name": "Sleep Monitoring App",
-  "short_name": "Sleep App",
+  "name": "Somnio",
+  "short_name": "Somnio",
   "description": "Monitorea y mejora tu sueño cada noche",
   "start_url": "./sleep-final.html",
   "display": "standalone",
